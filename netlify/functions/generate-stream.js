@@ -54,7 +54,7 @@ export default async (req) => {
   try { payload = await req.json(); }
   catch { return new Response(JSON.stringify({ error: 'Invalid JSON' }), { status: 400 }); }
 
-  const { company, allContacts, selectedContacts, customContacts, campaign, notes, accountOwner } = payload;
+  const { company, allContacts, selectedContacts, customContacts, campaign, notes, accountOwner, isResearch } = payload;
 
   const today = new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
 
@@ -71,7 +71,7 @@ export default async (req) => {
     return `- ${c.name} | ${c.title || 'N/A'} | ${c.notes} notes | ${c.sequences} seq | reply: ${c.lastReply || 'none'}${sig}`;
   }).join('\n');
 
-  const userPrompt = `Generate a meeting prep brief.
+  const userPrompt = `Generate a ${isResearch ? 'company intelligence research brief' : 'meeting prep brief'}.
 
 COMPANY: ${company.name}
 LOCATION: ${company.city || ''}, ${company.state || ''}
@@ -89,7 +89,16 @@ ${customList ? `\nCUSTOM CONTACTS:\n${customList}` : ''}
 FULL CRM CONTACT LIST:
 ${allContactsTable}
 
-Use your knowledge of ${company.name} for Leadership and Strategic Context. Return only JSON.`;
+Use your knowledge of ${company.name} for Leadership and Strategic Context.${isResearch ? `
+
+This is a RESEARCH BRIEF, not a meeting prep. No contacts are specified.
+- Skip or minimize the "Who You Are Meeting" section (use a placeholder)
+- Skip the "Account Activity" section (no CRM data)
+- Expand "Leadership Context" and "Strategic Context" with more depth
+- Rename "Meeting Angles" to "Strategic Intelligence" and make it org-level insights: key priorities, market position, likely pain points, how CarePathIQ maps to their world
+- "Things to Watch" should cover org dynamics, merger implications, competitive context` : ''}
+
+Return only JSON.`;
 
   const encoder = new TextEncoder();
 
