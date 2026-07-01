@@ -218,7 +218,7 @@ label{display:block;font-size:10px;font-weight:600;color:var(--text3);text-trans
       <div class="logo-mark">M</div>
       <div>
         <div class="logo-name">Meeting Prep</div>
-        <div class="logo-sub">Care Continuity · CarePathIQ Intelligence</div>
+        <div class="logo-sub">Care Continuity · Cipher</div>
       </div>
     </div>
     <button class="btn btn-ghost btn-sm" onclick="resetAll()">&#8635; Start Over</button>
@@ -704,7 +704,10 @@ function renderBrief(b) {
     +'<div class="brief-meta">'+(contactNames||'')+(b.campaign?' &nbsp;|&nbsp; '+escH(b.campaign):'')+(b.account_owner?' &nbsp;|&nbsp; Acct: '+escH(b.account_owner):'')+(b.date?' &nbsp;|&nbsp; '+escH(b.date):'')+'</div>';
 
   // Sections
-  document.getElementById('briefBody').innerHTML = (b.sections||[]).map(renderSection).join('');
+  document.getElementById('briefBody').innerHTML = (b.sections||[]).map(renderSection).join('')
+    + '<div style="padding:12px 24px;border-top:1px solid var(--border);font-size:10px;color:var(--text3);font-style:italic">'
+    + 'Prepared by Care Continuity &nbsp;|&nbsp; Cipher &nbsp;|&nbsp; ' + escH(b.date||'') + ' &nbsp;|&nbsp; Confidential'
+    + '</div>';
 }
 
 function renderSection(s) {
@@ -853,7 +856,7 @@ function downloadDocx() {
     children.push(sp());
   });
 
-  children.push(new D.Paragraph({spacing:{before:280,after:0},border:{top:{style:D.BorderStyle.SINGLE,size:4,color:BORDER,space:6}},children:[new D.TextRun({text:"Prepared by Care Continuity  |  CarePathIQ Sales Intelligence  |  "+b.date+"  |  Confidential",font:"Arial",size:18,color:GRAY,italic:true})]}));
+  children.push(new D.Paragraph({spacing:{before:280,after:0},border:{top:{style:D.BorderStyle.SINGLE,size:4,color:BORDER,space:6}},children:[new D.TextRun({text:"Prepared by Care Continuity  |  Cipher  |  "+b.date+"  |  Confidential",font:"Arial",size:18,color:GRAY,italic:true})]}));
 
   var doc = new D.Document({
     numbering:{config:[{reference:"bullets",levels:[{level:0,format:D.LevelFormat.BULLET,text:"\u2022",alignment:D.AlignmentType.LEFT,style:{paragraph:{indent:{left:720,hanging:360}}}}]}]},
