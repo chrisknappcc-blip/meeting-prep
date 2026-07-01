@@ -536,7 +536,6 @@ function generate() {
   state.notes = document.getElementById('contextNotes').value.trim();
 
   var selected = state.allContacts.filter(function(c){ return state.selectedIds.has(c.id); });
-
   if (selected.length === 0 && state.customContacts.length === 0) {
     alert('Please select at least one contact for the meeting.');
     return;
@@ -551,17 +550,28 @@ function generate() {
   var steps = ['ls1','ls2','ls3','ls4'];
   var stepIdx = 0;
   var stepTimer = setInterval(function() {
-    if (stepIdx > 0) { var prev = document.getElementById(steps[stepIdx-1]); prev.className='loading-step done'; prev.innerHTML = prev.innerHTML.replace('⟳','✓'); }
-    if (stepIdx < steps.length) { document.getElementById(steps[stepIdx]).className='loading-step active'; stepIdx++; }
-    else clearInterval(stepTimer);
-  }, 5000);
+    if (stepIdx > 0) {
+      var prev = document.getElementById(steps[stepIdx-1]);
+      if(prev){ prev.className='loading-step done'; prev.innerHTML = prev.innerHTML.replace('⟳','✓'); }
+    }
+    if (stepIdx < steps.length) {
+      var cur = document.getElementById(steps[stepIdx]);
+      if(cur) cur.className='loading-step active';
+      stepIdx++;
+    } else clearInterval(stepTimer);
+  }, 8000);
 
-  var OWNERS = { '76104455': 'Matt Valin', '55217954': 'Joe Haine', '83862037': 'Tim Grisham', '78304576': 'Chris Knapp', '87806380': 'Chiara Pate' };
+  // Generate a job ID client-side
+  var jobId = ([1e7]+-1e3+-4e3+-8e3+-1e11).replace(/[018]/g,function(c){
+    return (c^(crypto.getRandomValues(new Uint8Array(1))[0]&(15>>c/4))).toString(16);
+  });
 
-  fetch('/.netlify/functions/generate', {
+  // Fire background function (returns 202 immediately)
+  fetch('/.netlify/functions/generate-background', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
+      jobId: jobId,
       company: state.company,
       allContacts: state.allContacts,
       selectedContacts: selected,
@@ -570,21 +580,41 @@ function generate() {
       notes: state.notes,
       accountOwner: state.company.owner,
     }),
-  })
-  .then(function(r) { return r.json(); })
-  .then(function(data) {
-    clearInterval(stepTimer);
-    document.getElementById('loadingState').style.display = 'none';
-    if (data.error) { showError(data.error); return; }
-    state.brief = data.brief;
-    renderBrief(data.brief);
-    document.getElementById('briefDisplay').style.display = 'block';
-  })
-  .catch(function(err) {
-    clearInterval(stepTimer);
-    document.getElementById('loadingState').style.display = 'none';
-    showError(err.message);
-  });
+  }).catch(function(){});
+
+  // Poll for result
+  var pollCount = 0;
+  var maxPolls = 60; // 2 minutes max
+  var pollTimer = setInterval(function() {
+    pollCount++;
+    if (pollCount > maxPolls) {
+      clearInterval(pollTimer);
+      clearInterval(stepTimer);
+      document.getElementById('loadingState').style.display = 'none';
+      showError('Generation timed out. Please try again.');
+      return;
+    }
+
+    fetch('/.netlify/functions/generate-status?id=' + jobId)
+      .then(function(r) { return r.json(); })
+      .then(function(data) {
+        if (data.status === 'done') {
+          clearInterval(pollTimer);
+          clearInterval(stepTimer);
+          document.getElementById('loadingState').style.display = 'none';
+          state.brief = data.brief;
+          renderBrief(data.brief);
+          document.getElementById('briefDisplay').style.display = 'block';
+        } else if (data.status === 'error') {
+          clearInterval(pollTimer);
+          clearInterval(stepTimer);
+          document.getElementById('loadingState').style.display = 'none';
+          showError(data.error || 'Generation failed');
+        }
+        // if pending, keep polling
+      })
+      .catch(function() {});
+  }, 2000);
 }
 
 function showError(msg) {
