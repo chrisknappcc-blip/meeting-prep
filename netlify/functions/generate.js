@@ -167,7 +167,7 @@ Generate the full meeting prep brief now. Return only the JSON.`;
       },
       body: JSON.stringify({
         model: 'claude-haiku-4-5-20251001',
-        max_tokens: 4000,
+        max_tokens: 7000,
         system: SYSTEM_PROMPT,
         messages: [{ role: 'user', content: userPrompt }],
       }),
@@ -179,14 +179,32 @@ Generate the full meeting prep brief now. Return only the JSON.`;
       return { statusCode: 500, body: JSON.stringify({ error: data.error?.message || 'Anthropic API error' }) };
     }
 
+    // Check for truncation
+    if (data.stop_reason === 'max_tokens') {
+      return { statusCode: 500, body: JSON.stringify({ error: 'Brief was too long to generate in one pass. Try selecting fewer contacts or adding a campaign note to focus the output.' }) };
+    }
+
     const textBlock = data.content?.find(b => b.type === 'text');
     if (!textBlock) return { statusCode: 500, body: JSON.stringify({ error: 'No text in response' }) };
 
+    const raw = textBlock.text.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+
     let brief;
     try {
-      brief = JSON.parse(textBlock.text.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim());
+      brief = JSON.parse(raw);
     } catch {
-      return { statusCode: 500, body: JSON.stringify({ error: 'Failed to parse brief JSON', raw: textBlock.text.slice(0, 500) }) };
+      // Try to find valid JSON in the response
+      const jsonStart = raw.indexOf('{');
+      const jsonEnd = raw.lastIndexOf('}');
+      if (jsonStart !== -1 && jsonEnd !== -1) {
+        try {
+          brief = JSON.parse(raw.slice(jsonStart, jsonEnd + 1));
+        } catch {
+          return { statusCode: 500, body: JSON.stringify({ error: 'Could not parse brief — model returned malformed JSON.', raw: raw.slice(0, 300) }) };
+        }
+      } else {
+        return { statusCode: 500, body: JSON.stringify({ error: 'Model did not return valid JSON.', raw: raw.slice(0, 300) }) };
+      }
     }
 
     return {
