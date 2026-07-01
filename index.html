@@ -192,6 +192,18 @@ label{display:block;font-size:10px;font-weight:600;color:var(--text3);text-trans
 .skip-contacts-bar{padding:10px 14px;background:rgba(79,142,247,.07);border:1px dashed rgba(79,142,247,.3);border-radius:var(--r);font-size:11px;color:var(--text2);display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:8px}
 .use-manually-row{padding:10px 14px;border-top:1px solid var(--border);cursor:pointer;display:flex;align-items:center;gap:8px;font-size:11px;color:var(--text3);transition:background .1s}
 .use-manually-row:hover{background:var(--hover);color:var(--text)}
+.rec-card{background:var(--sec);border:1px solid var(--border);border-radius:var(--r);padding:12px 14px;margin-bottom:8px}
+.rec-card:last-child{margin-bottom:0}
+.rec-card.primary{border-left:3px solid var(--green)}
+.rec-card.secondary{border-left:3px solid var(--accent)}
+.rec-card.supporting{border-left:3px solid var(--borderl)}
+.rec-name{font-size:12px;font-weight:600;color:var(--text);margin-bottom:2px}
+.rec-title{font-size:11px;color:var(--accent);margin-bottom:6px}
+.rec-badge{display:inline-block;padding:1px 6px;border-radius:3px;font-size:9px;font-weight:700;margin-right:6px}
+.rec-badge.named{background:rgba(52,201,122,.2);color:var(--green);border:1px solid rgba(52,201,122,.3)}
+.rec-badge.persona{background:var(--acl);color:var(--accent);border:1px solid rgba(79,142,247,.3)}
+.rec-why{font-size:11px;color:var(--text2);line-height:1.6;margin-bottom:4px}
+.rec-find{font-size:10px;color:var(--text3);display:flex;align-items:center;gap:4px}
 .badge{display:inline-block;padding:2px 7px;border-radius:3px;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.04em}
 .selected-summary{font-size:11px;color:var(--text3);margin-top:8px}
 .selected-summary strong{color:var(--accent)}
@@ -745,6 +757,23 @@ function renderSection(s) {
     content = (s.items||[]).map(function(a){
       return '<div class="angle-item"><div class="angle-heading">'+escH(a.heading)+'</div><div class="angle-body">'+escH(a.body)+'</div></div>';
     }).join('');
+  }
+
+  if (s.type === 'recommended') {
+    var recContacts = (s.contacts || []);
+    content = (s.note ? '<div style="font-size:10px;color:var(--text3);margin-bottom:12px;font-style:italic">'+escH(s.note)+'</div>' : '')
+      + recContacts.map(function(r) {
+        var pri = (r.priority||'').toLowerCase().indexOf('1') !== -1 ? 'primary' : (r.priority||'').toLowerCase().indexOf('2') !== -1 ? 'secondary' : 'supporting';
+        var badge = r.isNamed
+          ? '<span class="rec-badge named">Named</span>'
+          : '<span class="rec-badge persona">Persona</span>';
+        return '<div class="rec-card '+pri+'">'
+          +'<div class="rec-name">'+badge+escH(r.name||'')+'</div>'
+          +'<div class="rec-title">'+escH(r.title||'')+'</div>'
+          +'<div class="rec-why">'+escH(r.why||'')+'</div>'
+          +(r.findVia ? '<div class="rec-find">&#8227; <em>Find via:</em> '+escH(r.findVia)+'</div>' : '')
+          +'</div>';
+      }).join('');
   }
 
   return '<div class="brief-section"><div class="section-heading">'+escH(s.heading)+'</div>'+content+'</div>';
