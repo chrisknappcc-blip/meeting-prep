@@ -41,7 +41,8 @@ Return ONLY valid JSON:
     {"id":"leadership","heading":"Leadership Context","type":"bullets_grouped","groups":[{"heading":null,"bullets":["string"]}]},
     {"id":"strategic","heading":"Strategic Context","type":"bullets_grouped","groups":[{"heading":"string","bullets":["string"]}]},
     {"id":"angles","heading":"Meeting Angles","type":"angles","items":[{"heading":"string","body":"string"}]},
-    {"id":"watch","heading":"Things to Watch","type":"bullets","bullets":["string"]}
+    {"id":"watch","heading":"Things to Watch","type":"bullets","bullets":["string"]},
+    {"id":"recommended","heading":"Recommended Contacts","type":"recommended","note":"RESEARCH BRIEF ONLY — omit for meeting prep","contacts":[{"name":"string (real name OR role title if name unknown)","title":"string","isNamed":true,"priority":"string (1-Primary, 2-Secondary, 3-Supporting)","why":"string (why this person for this specific campaign)","findVia":"string (LinkedIn title search, conference, referral from X, etc.)"}]}
   ]
 }`;
 
@@ -96,7 +97,12 @@ This is a RESEARCH BRIEF, not a meeting prep. No contacts are specified.
 - Skip the "Account Activity" section (no CRM data)
 - Expand "Leadership Context" and "Strategic Context" with more depth
 - Rename "Meeting Angles" to "Strategic Intelligence" and make it org-level insights: key priorities, market position, likely pain points, how CarePathIQ maps to their world
-- "Things to Watch" should cover org dynamics, merger implications, competitive context` : ''}
+- "Things to Watch" should cover org dynamics, merger implications, competitive context
+- Add a "Recommended Contacts" section (id: "recommended") as the LAST section. For each recommended person:
+  * If you know actual named individuals at this org from your training data, name them with their title
+  * If not, recommend the right PERSONAS (role title + why this role for this campaign)
+  * Always explain WHY each person matters for the specific campaign angle
+  * Include 4-6 recommended contacts/personas sorted by priority` : ''}
 
 Return only JSON.`;
 
