@@ -1,0 +1,713 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Meeting Prep — Care Continuity</title>
+<script src="https://unpkg.com/docx@9.0.2/build/index.umd.js"></script>
+<style>
+:root{
+  --bg:#111318;--panel:#1c1f26;--sec:#22262f;--hover:#272b35;
+  --border:#2e3340;--borderl:#383d4a;
+  --text:#e8eaf0;--text2:#9ba3b4;--text3:#5c6478;
+  --accent:#4f8ef7;--acl:rgba(79,142,247,.12);
+  --green:#34c97a;--greenl:rgba(52,201,122,.1);
+  --red:#f05252;--redl:rgba(240,82,82,.1);
+  --amber:#f5a623;
+  --r:6px;--rl:10px;--mono:"DM Mono",monospace;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:var(--bg);color:var(--text);font-size:13px;line-height:1.55;min-height:100vh}
+
+/* Layout */
+.app{max-width:900px;margin:0 auto;padding:28px 24px}
+.header{display:flex;align-items:center;justify-content:space-between;margin-bottom:28px}
+.logo{display:flex;align-items:center;gap:10px}
+.logo-mark{width:28px;height:28px;background:var(--accent);border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:700;color:#fff}
+.logo-name{font-size:15px;font-weight:600;letter-spacing:-.01em}
+.logo-sub{font-size:10px;color:var(--text3);margin-top:1px}
+
+/* Steps */
+.step-bar{display:flex;gap:0;margin-bottom:24px;background:var(--panel);border:1px solid var(--border);border-radius:var(--rl);overflow:hidden}
+.step{flex:1;padding:10px 14px;font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--text3);cursor:pointer;transition:all .15s;border-right:1px solid var(--border);display:flex;align-items:center;gap:6px}
+.step:last-child{border-right:none}
+.step.active{background:var(--acl);color:var(--accent)}
+.step.done{color:var(--green)}
+.step-n{width:18px;height:18px;border-radius:50%;background:var(--border);display:flex;align-items:center;justify-content:center;font-size:9px;flex-shrink:0}
+.step.active .step-n{background:var(--accent);color:#fff}
+.step.done .step-n{background:var(--green);color:#fff}
+
+/* Cards */
+.card{background:var(--panel);border:1px solid var(--border);border-radius:var(--rl);overflow:hidden;margin-bottom:16px}
+.card-head{padding:12px 16px;border-bottom:1px solid var(--border);background:var(--sec);display:flex;align-items:center;justify-content:space-between}
+.card-title{font-size:12px;font-weight:600}
+.card-body{padding:16px}
+
+/* Search */
+.search-wrap{position:relative}
+.search-input{width:100%;background:var(--sec);border:1px solid var(--borderl);color:var(--text);font-size:13px;padding:10px 14px 10px 38px;border-radius:var(--r);outline:none;transition:border .15s}
+.search-input:focus{border-color:var(--accent)}
+.search-icon{position:absolute;left:12px;top:50%;transform:translateY(-50%);color:var(--text3);font-size:14px;pointer-events:none}
+.search-results{background:var(--panel);border:1px solid var(--borderl);border-radius:var(--r);margin-top:4px;overflow:hidden;display:none}
+.search-results.visible{display:block}
+.result-item{padding:10px 14px;cursor:pointer;border-bottom:1px solid var(--border);transition:background .1s;display:flex;align-items:center;justify-content:space-between}
+.result-item:last-child{border-bottom:none}
+.result-item:hover{background:var(--hover)}
+.result-name{font-weight:500;font-size:12px}
+.result-meta{font-size:10px;color:var(--text3);margin-top:2px}
+.result-notes{font-size:10px;color:var(--text3);font-family:var(--mono)}
+
+/* Contact list */
+.contact-list{display:flex;flex-direction:column;gap:6px;max-height:400px;overflow-y:auto}
+.contact-list::-webkit-scrollbar{width:4px}
+.contact-list::-webkit-scrollbar-thumb{background:var(--borderl);border-radius:2px}
+.contact-row{display:flex;align-items:center;gap:10px;padding:8px 12px;border-radius:var(--r);border:1px solid var(--border);cursor:pointer;transition:all .1s;background:var(--sec)}
+.contact-row:hover{background:var(--hover);border-color:var(--borderl)}
+.contact-row.selected{background:var(--acl);border-color:rgba(79,142,247,.35)}
+.contact-check{width:16px;height:16px;border:1px solid var(--borderl);border-radius:3px;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:10px;transition:all .1s}
+.contact-row.selected .contact-check{background:var(--accent);border-color:var(--accent);color:#fff}
+.contact-info{flex:1;min-width:0}
+.contact-name{font-size:12px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.contact-title{font-size:10px;color:var(--text3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.contact-signals{display:flex;gap:4px;flex-shrink:0}
+.sig{font-size:9px;font-weight:600;padding:1px 5px;border-radius:3px}
+.sig-booked{background:rgba(52,201,122,.2);color:var(--green)}
+.sig-replied{background:var(--acl);color:var(--accent)}
+.sig-warm{background:rgba(245,166,35,.15);color:var(--amber)}
+.sig-stale{background:var(--sec);color:var(--text3);border:1px solid var(--border)}
+.sig-bad{background:var(--redl);color:var(--red)}
+.contact-stats{font-size:9px;color:var(--text3);font-family:var(--mono);text-align:right;flex-shrink:0;line-height:1.6}
+
+/* Custom contact add */
+.add-custom{display:flex;gap:8px;margin-top:8px}
+.add-custom input{flex:1;background:var(--sec);border:1px solid var(--borderl);color:var(--text);font-size:12px;padding:7px 10px;border-radius:var(--r);outline:none}
+.add-custom input:focus{border-color:var(--accent)}
+.custom-contact-list{display:flex;flex-direction:column;gap:4px;margin-top:8px}
+.custom-tag{display:flex;align-items:center;gap:8px;padding:6px 10px;background:var(--sec);border:1px solid var(--borderl);border-radius:var(--r);font-size:11px}
+.custom-tag-name{font-weight:500}
+.custom-tag-title{color:var(--text3)}
+.custom-tag-rm{margin-left:auto;cursor:pointer;color:var(--text3);font-size:14px;line-height:1}
+.custom-tag-rm:hover{color:var(--red)}
+
+/* Inputs */
+textarea,select,.input{width:100%;background:var(--sec);border:1px solid var(--borderl);color:var(--text);font-size:12px;padding:9px 12px;border-radius:var(--r);outline:none;font-family:inherit;resize:vertical}
+textarea:focus,.input:focus,select:focus{border-color:var(--accent)}
+select{cursor:pointer}
+label{display:block;font-size:10px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:5px}
+
+/* Buttons */
+.btn{display:inline-flex;align-items:center;gap:6px;padding:8px 16px;border-radius:var(--r);font-size:12px;font-weight:600;cursor:pointer;transition:all .15s;border:none;font-family:inherit}
+.btn-primary{background:var(--accent);color:#fff}
+.btn-primary:hover{background:#3d7de8}
+.btn-primary:disabled{opacity:.4;cursor:not-allowed}
+.btn-ghost{background:transparent;border:1px solid var(--borderl);color:var(--text2)}
+.btn-ghost:hover{background:var(--hover);color:var(--text)}
+.btn-green{background:var(--green);color:#fff}
+.btn-green:hover{background:#28b56a}
+.btn-sm{padding:5px 10px;font-size:11px}
+
+/* Loading */
+.loading-wrap{padding:60px;text-align:center}
+.spinner{width:36px;height:36px;border:3px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin .8s linear infinite;margin:0 auto 16px}
+@keyframes spin{to{transform:rotate(360deg)}}
+.loading-title{font-size:14px;font-weight:600;margin-bottom:6px}
+.loading-sub{font-size:11px;color:var(--text3)}
+.loading-steps{display:flex;flex-direction:column;gap:4px;margin-top:16px;text-align:left;max-width:280px;margin-left:auto;margin-right:auto}
+.loading-step{font-size:11px;color:var(--text3);display:flex;align-items:center;gap:6px}
+.loading-step.active{color:var(--text)}
+.loading-step.done{color:var(--green)}
+
+/* Brief display */
+.brief-header{padding:20px 24px 16px;border-bottom:1px solid var(--border);background:var(--sec)}
+.brief-title{font-size:22px;font-weight:700;letter-spacing:-.02em;margin-bottom:4px}
+.brief-subtitle{font-size:13px;color:var(--accent);margin-bottom:2px}
+.brief-meta{font-size:10px;color:var(--text3)}
+.brief-actions{padding:12px 24px;border-bottom:1px solid var(--border);display:flex;gap:8px;background:var(--panel)}
+.brief-body{padding:0}
+.brief-section{padding:20px 24px;border-bottom:1px solid var(--border)}
+.brief-section:last-child{border-bottom:none}
+.section-heading{font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--text3);margin-bottom:14px;padding-bottom:8px;border-bottom:2px solid var(--accent)}
+
+/* Brief tables */
+.brief-table{width:100%;border-collapse:collapse}
+.brief-table tr:nth-child(odd) td:first-child,.brief-table tr:nth-child(odd) td{background:rgba(255,255,255,.02)}
+.brief-table td{padding:7px 12px;font-size:12px;border-bottom:1px solid var(--border);vertical-align:top}
+.brief-table td:first-child{font-weight:600;color:var(--text3);width:28%;white-space:nowrap;font-size:11px;text-transform:uppercase;letter-spacing:.03em}
+.brief-table td:last-child{color:var(--text2)}
+
+/* Brief profiles */
+.profile-block{margin-bottom:20px;padding:14px;background:var(--sec);border-radius:var(--r);border:1px solid var(--border)}
+.profile-block:last-child{margin-bottom:0}
+.profile-name{font-size:14px;font-weight:700;margin-bottom:2px}
+.profile-subtitle{font-size:11px;color:var(--accent);margin-bottom:10px}
+.profile-body{font-size:12px;color:var(--text2);line-height:1.65;margin-top:10px;padding-top:10px;border-top:1px solid var(--border)}
+
+/* CRM contacts table */
+.crm-narrative{font-size:12px;color:var(--text2);line-height:1.65;margin-bottom:14px}
+.crm-table{width:100%;border-collapse:collapse}
+.crm-table th{padding:5px 10px;font-size:9px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--text3);border-bottom:1px solid var(--border);text-align:left;background:var(--sec)}
+.crm-table td{padding:7px 10px;font-size:11px;color:var(--text2);border-bottom:1px solid var(--border)}
+.crm-table tr:last-child td{border-bottom:none}
+.status-badge{display:inline-block;padding:1px 6px;border-radius:3px;font-size:9px;font-weight:700}
+.s-booked{background:rgba(52,201,122,.2);color:var(--green)}
+.s-replied{background:var(--acl);color:var(--accent)}
+.s-active{background:rgba(245,166,35,.15);color:var(--amber)}
+.s-stale{background:var(--hover);color:var(--text3);border:1px solid var(--border)}
+.s-bad{background:var(--redl);color:var(--red)}
+
+/* Bullets */
+.bullet-group{margin-bottom:14px}
+.bullet-group:last-child{margin-bottom:0}
+.bullet-group-heading{font-size:12px;font-weight:600;color:var(--accent);margin-bottom:8px}
+.bullet-list{list-style:none;display:flex;flex-direction:column;gap:6px}
+.bullet-list li{font-size:12px;color:var(--text2);padding-left:16px;position:relative;line-height:1.6}
+.bullet-list li::before{content:"•";position:absolute;left:0;color:var(--accent);font-weight:700}
+
+/* Angles */
+.angle-item{margin-bottom:16px;padding:14px;border-left:3px solid var(--accent);background:rgba(79,142,247,.05);border-radius:0 var(--r) var(--r) 0}
+.angle-item:last-child{margin-bottom:0}
+.angle-heading{font-size:12px;font-weight:700;margin-bottom:8px;color:var(--text)}
+.angle-body{font-size:12px;color:var(--text2);line-height:1.65}
+
+/* Watch items */
+.watch-list{list-style:none;display:flex;flex-direction:column;gap:8px}
+.watch-list li{font-size:12px;color:var(--text2);padding:8px 12px 8px 32px;position:relative;background:var(--redl);border:1px solid rgba(240,82,82,.15);border-radius:var(--r);line-height:1.6}
+.watch-list li::before{content:"⚑";position:absolute;left:10px;top:8px;color:var(--red);font-size:12px}
+
+/* Utils */
+.divider{height:1px;background:var(--border);margin:16px 0}
+.row{display:flex;gap:12px}
+.row > *{flex:1}
+.empty-state{padding:40px;text-align:center;color:var(--text3);font-size:12px}
+.badge{display:inline-block;padding:2px 7px;border-radius:3px;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.04em}
+.selected-summary{font-size:11px;color:var(--text3);margin-top:8px}
+.selected-summary strong{color:var(--accent)}
+.error-box{background:var(--redl);border:1px solid rgba(240,82,82,.3);border-radius:var(--rl);padding:14px 16px;margin-top:12px;font-size:12px;color:var(--red)}
+</style>
+</head>
+<body>
+<div class="app">
+
+  <div class="header">
+    <div class="logo">
+      <div class="logo-mark">M</div>
+      <div>
+        <div class="logo-name">Meeting Prep</div>
+        <div class="logo-sub">Care Continuity · CarePathIQ Intelligence</div>
+      </div>
+    </div>
+    <button class="btn btn-ghost btn-sm" onclick="resetAll()">&#8635; Start Over</button>
+  </div>
+
+  <div class="step-bar" id="stepBar">
+    <div class="step active" id="step1tab" onclick="goStep(1)"><div class="step-n">1</div>Company</div>
+    <div class="step" id="step2tab" onclick="goStep(2)"><div class="step-n">2</div>Contacts</div>
+    <div class="step" id="step3tab" onclick="goStep(3)"><div class="step-n">3</div>Context</div>
+    <div class="step" id="step4tab" onclick="goStep(4)"><div class="step-n">4</div>Brief</div>
+  </div>
+
+  <!-- STEP 1: COMPANY SEARCH -->
+  <div id="view1">
+    <div class="card">
+      <div class="card-head"><div class="card-title">Search for a company in HubSpot</div></div>
+      <div class="card-body">
+        <div class="search-wrap">
+          <span class="search-icon">⌕</span>
+          <input class="search-input" id="companySearch" type="text" placeholder="Type a health system name..." autocomplete="off" oninput="searchCompany(this.value)">
+        </div>
+        <div class="search-results" id="searchResults"></div>
+        <div id="selectedCompanyDisplay" style="display:none;margin-top:12px;"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- STEP 2: CONTACT SELECTION -->
+  <div id="view2" style="display:none">
+    <div class="card">
+      <div class="card-head">
+        <div class="card-title">Select contacts in this meeting</div>
+        <span id="contactCount" style="font-size:10px;color:var(--text3)"></span>
+      </div>
+      <div class="card-body">
+        <div class="contact-list" id="contactList"></div>
+        <div class="selected-summary" id="selectedSummary"></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-head"><div class="card-title">Add someone not in HubSpot</div></div>
+      <div class="card-body">
+        <div class="add-custom">
+          <input type="text" id="customName" placeholder="Full name" style="flex:1;background:var(--sec);border:1px solid var(--borderl);color:var(--text);font-size:12px;padding:7px 10px;border-radius:var(--r);outline:none">
+          <input type="text" id="customTitle" placeholder="Title / Role" style="flex:1.5;background:var(--sec);border:1px solid var(--borderl);color:var(--text);font-size:12px;padding:7px 10px;border-radius:var(--r);outline:none">
+          <button class="btn btn-ghost btn-sm" onclick="addCustom()">+ Add</button>
+        </div>
+        <div class="custom-contact-list" id="customList"></div>
+      </div>
+    </div>
+
+    <div style="display:flex;justify-content:flex-end">
+      <button class="btn btn-primary" onclick="goStep(3)" id="toStep3Btn">Continue →</button>
+    </div>
+  </div>
+
+  <!-- STEP 3: CONTEXT -->
+  <div id="view3" style="display:none">
+    <div class="card">
+      <div class="card-head"><div class="card-title">Meeting context</div></div>
+      <div class="card-body" style="display:flex;flex-direction:column;gap:14px">
+        <div>
+          <label>Campaign / How this meeting was booked</label>
+          <select id="campaignSelect" class="input">
+            <option value="">Select campaign...</option>
+            <option value="ED Connect — they responded to the ED Connect email campaign and scheduled a meeting">ED Connect campaign</option>
+            <option value="Readmission IQ — they responded to the Readmission IQ outreach">Readmission IQ campaign</option>
+            <option value="Network / Referral IQ — they responded to the referral intelligence outreach">Network / Referral IQ campaign</option>
+            <option value="IP Navigation — they responded to the inpatient navigation outreach">IP Navigation campaign</option>
+            <option value="MOMS — they responded to the maternal outcomes outreach">MOMS campaign</option>
+            <option value="Inbound — they reached out to us">Inbound / They reached out</option>
+            <option value="Conference / event — met at a conference">Conference / Event</option>
+            <option value="Referral — referred by another contact">Referral</option>
+            <option value="other">Other / Not sure</option>
+          </select>
+        </div>
+        <div>
+          <label>Additional context for the AI (optional)</label>
+          <textarea id="contextNotes" placeholder="Anything else the AI should know — specific concerns the contact mentioned, a deal in progress, internal dynamics you're aware of, previous meeting outcomes..." rows="3" style="background:var(--sec);border:1px solid var(--borderl);color:var(--text);font-size:12px;padding:9px 12px;border-radius:var(--r);outline:none;width:100%;font-family:inherit;resize:vertical"></textarea>
+        </div>
+      </div>
+    </div>
+
+    <div style="display:flex;justify-content:space-between">
+      <button class="btn btn-ghost" onclick="goStep(2)">← Back</button>
+      <button class="btn btn-primary" onclick="generate()" id="generateBtn">Generate Brief</button>
+    </div>
+  </div>
+
+  <!-- STEP 4: BRIEF -->
+  <div id="view4" style="display:none">
+    <div id="loadingState" style="display:none">
+      <div class="card">
+        <div class="loading-wrap">
+          <div class="spinner"></div>
+          <div class="loading-title">Researching and writing your brief...</div>
+          <div class="loading-sub">Searching for recent news, leadership changes, and strategic context</div>
+          <div class="loading-steps" id="loadingSteps">
+            <div class="loading-step active" id="ls1">⟳ Pulling HubSpot engagement data</div>
+            <div class="loading-step" id="ls2">⟳ Searching for recent company news</div>
+            <div class="loading-step" id="ls3">⟳ Researching leadership and strategy</div>
+            <div class="loading-step" id="ls4">⟳ Synthesizing and writing brief</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div id="briefDisplay" style="display:none">
+      <div class="card">
+        <div class="brief-header" id="briefHeader"></div>
+        <div class="brief-actions">
+          <button class="btn btn-green btn-sm" onclick="downloadDocx()">⬇ Download Word Doc</button>
+          <button class="btn btn-ghost btn-sm" onclick="window.print()">⎙ Print</button>
+          <button class="btn btn-ghost btn-sm" onclick="goStep(1)">New Brief</button>
+        </div>
+        <div class="brief-body" id="briefBody"></div>
+      </div>
+    </div>
+
+    <div id="errorState" style="display:none"></div>
+  </div>
+
+</div>
+
+<script>
+// ── STATE ─────────────────────────────────────────────────────────────────────
+var state = {
+  company: null,
+  allContacts: [],
+  selectedIds: new Set(),
+  customContacts: [],
+  campaign: '',
+  notes: '',
+  brief: null,
+};
+var searchTimer = null;
+var currentStep = 1;
+
+// ── NAVIGATION ────────────────────────────────────────────────────────────────
+function goStep(n) {
+  if (n === 2 && !state.company) return;
+  if (n === 3 && state.selectedIds.size === 0 && state.customContacts.length === 0) return;
+  currentStep = n;
+  [1,2,3,4].forEach(function(i) {
+    document.getElementById('view'+i).style.display = i===n?'':'none';
+    var tab = document.getElementById('step'+i+'tab');
+    tab.className = 'step' + (i===n?' active':i<n?' done':'');
+  });
+}
+
+function resetAll() {
+  state = { company: null, allContacts: [], selectedIds: new Set(), customContacts: [], campaign: '', notes: '', brief: null };
+  document.getElementById('companySearch').value = '';
+  document.getElementById('searchResults').innerHTML = '';
+  document.getElementById('searchResults').classList.remove('visible');
+  document.getElementById('selectedCompanyDisplay').style.display = 'none';
+  document.getElementById('briefDisplay').style.display = 'none';
+  document.getElementById('loadingState').style.display = 'none';
+  document.getElementById('errorState').style.display = 'none';
+  goStep(1);
+}
+
+// ── STEP 1: COMPANY SEARCH ────────────────────────────────────────────────────
+function searchCompany(q) {
+  clearTimeout(searchTimer);
+  if (q.length < 2) { document.getElementById('searchResults').classList.remove('visible'); return; }
+  searchTimer = setTimeout(function() {
+    fetch('/.netlify/functions/hs-search?q=' + encodeURIComponent(q))
+      .then(function(r) { return r.json(); })
+      .then(function(results) {
+        var el = document.getElementById('searchResults');
+        if (!results.length) { el.innerHTML = '<div class="empty-state">No companies found</div>'; }
+        else {
+          el.innerHTML = results.map(function(c) {
+            var loc = [c.city, c.state].filter(Boolean).join(', ');
+            var la = c.lastActivity ? new Date(c.lastActivity).toLocaleDateString('en-US',{month:'short',year:'numeric'}) : '';
+            return '<div class="result-item" onclick="selectCompany('+JSON.stringify(c).replace(/"/g,'&quot;')+')">'
+              +'<div><div class="result-name">'+escH(c.name)+'</div><div class="result-meta">'+(loc||'&nbsp;')+(c.owner?' · '+c.owner:'')+'</div></div>'
+              +'<div class="result-notes">'+(c.notes||0)+' notes'+(la?' · '+la:'')+'</div>'
+              +'</div>';
+          }).join('');
+        }
+        el.classList.add('visible');
+      });
+  }, 280);
+}
+
+function selectCompany(c) {
+  state.company = c;
+  document.getElementById('searchResults').classList.remove('visible');
+  document.getElementById('companySearch').value = c.name;
+  var loc = [c.city, c.state].filter(Boolean).join(', ');
+  document.getElementById('selectedCompanyDisplay').innerHTML =
+    '<div style="background:var(--greenl);border:1px solid rgba(52,201,122,.25);border-radius:var(--r);padding:10px 14px;display:flex;align-items:center;justify-content:space-between">'
+    +'<div><div style="font-weight:600;font-size:12px">'+escH(c.name)+'</div><div style="font-size:10px;color:var(--text3);margin-top:2px">'+(loc||'')+' &nbsp;·&nbsp; '+c.notes+' contacted notes'+(c.owner?' &nbsp;·&nbsp; Owner: '+c.owner:'')+'</div></div>'
+    +'<button class="btn btn-primary btn-sm" onclick="loadContacts()">Load Contacts →</button>'
+    +'</div>';
+  document.getElementById('selectedCompanyDisplay').style.display = 'block';
+}
+
+// ── STEP 2: CONTACTS ──────────────────────────────────────────────────────────
+function loadContacts() {
+  document.getElementById('contactList').innerHTML = '<div class="empty-state"><div class="spinner" style="width:20px;height:20px;border-width:2px;margin:0 auto 8px"></div>Loading contacts...</div>';
+  goStep(2);
+  fetch('/.netlify/functions/hs-contacts?id=' + state.company.id)
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+      state.allContacts = data.contacts;
+      document.getElementById('contactCount').textContent = data.total + ' contacts';
+      renderContacts();
+    });
+}
+
+function renderContacts() {
+  var list = document.getElementById('contactList');
+  if (!state.allContacts.length) { list.innerHTML = '<div class="empty-state">No contacts found for this company</div>'; return; }
+
+  list.innerHTML = state.allContacts.map(function(c) {
+    var selected = state.selectedIds.has(c.id);
+    var sigs = buildSignalBadges(c);
+    var stats = [c.notes+' notes', c.sequences+' seq'];
+    if (c.replyAgeDays !== null && c.replyAgeDays <= 30) stats.push('replied '+c.replyAgeDays+'d ago');
+    else if (c.replyAgeDays !== null && c.replyAgeDays <= 90) stats.push('replied '+c.replyAgeDays+'d ago');
+    return '<div class="contact-row'+(selected?' selected':'')+'" onclick="toggleContact(\''+c.id+'\')">'
+      +'<div class="contact-check">'+(selected?'✓':'')+'</div>'
+      +'<div class="contact-info"><div class="contact-name">'+escH(c.name)+'</div><div class="contact-title">'+escH(c.title||'')+'</div></div>'
+      +'<div class="contact-signals">'+sigs+'</div>'
+      +'<div class="contact-stats">'+stats.join('<br>')+'</div>'
+      +'</div>';
+  }).join('');
+
+  updateSelectedSummary();
+}
+
+function buildSignalBadges(c) {
+  var out = '';
+  if (c.signals.includes('BOOKED_MEETING')) out += '<span class="sig sig-booked">BOOKED</span>';
+  if (c.signals.includes('NOT_INTERESTED')) out += '<span class="sig sig-bad">NOT INTERESTED</span>';
+  if (c.signals.includes('LEFT_ORG')) out += '<span class="sig sig-bad">LEFT ORG</span>';
+  if (!c.signals.includes('BOOKED_MEETING') && !c.signals.includes('LEFT_ORG')) {
+    if (c.replyAgeDays !== null && c.replyAgeDays <= 30) out += '<span class="sig sig-replied">REPLIED</span>';
+    else if (c.replyAgeDays !== null && c.replyAgeDays <= 90) out += '<span class="sig sig-warm">WARM</span>';
+    else if (c.notes > 0) out += '<span class="sig sig-stale">TOUCHED</span>';
+  }
+  return out;
+}
+
+function toggleContact(id) {
+  if (state.selectedIds.has(id)) state.selectedIds.delete(id);
+  else state.selectedIds.add(id);
+  renderContacts();
+}
+
+function updateSelectedSummary() {
+  var n = state.selectedIds.size + state.customContacts.length;
+  var el = document.getElementById('selectedSummary');
+  if (n === 0) el.textContent = 'No contacts selected yet';
+  else {
+    var names = state.allContacts.filter(function(c){return state.selectedIds.has(c.id);}).map(function(c){return c.name;});
+    names = names.concat(state.customContacts.map(function(c){return c.name;}));
+    el.innerHTML = '<strong>' + n + ' selected:</strong> ' + names.join(', ');
+  }
+}
+
+function addCustom() {
+  var name = document.getElementById('customName').value.trim();
+  var title = document.getElementById('customTitle').value.trim();
+  if (!name) return;
+  state.customContacts.push({ name: name, title: title });
+  document.getElementById('customName').value = '';
+  document.getElementById('customTitle').value = '';
+  renderCustomList();
+  updateSelectedSummary();
+}
+
+function removeCustom(i) {
+  state.customContacts.splice(i, 1);
+  renderCustomList();
+  updateSelectedSummary();
+}
+
+function renderCustomList() {
+  document.getElementById('customList').innerHTML = state.customContacts.map(function(c, i) {
+    return '<div class="custom-tag"><span class="custom-tag-name">'+escH(c.name)+'</span>'+(c.title?'<span class="custom-tag-title"> — '+escH(c.title)+'</span>':'')+'<span class="custom-tag-rm" onclick="removeCustom('+i+')">×</span></div>';
+  }).join('');
+}
+
+// ── STEP 3 → 4: GENERATE ─────────────────────────────────────────────────────
+function generate() {
+  state.campaign = document.getElementById('campaignSelect').value;
+  state.notes = document.getElementById('contextNotes').value.trim();
+
+  var selected = state.allContacts.filter(function(c){ return state.selectedIds.has(c.id); });
+
+  if (selected.length === 0 && state.customContacts.length === 0) {
+    alert('Please select at least one contact for the meeting.');
+    return;
+  }
+
+  goStep(4);
+  document.getElementById('loadingState').style.display = 'block';
+  document.getElementById('briefDisplay').style.display = 'none';
+  document.getElementById('errorState').style.display = 'none';
+
+  // Animate loading steps
+  var steps = ['ls1','ls2','ls3','ls4'];
+  var stepIdx = 0;
+  var stepTimer = setInterval(function() {
+    if (stepIdx > 0) { var prev = document.getElementById(steps[stepIdx-1]); prev.className='loading-step done'; prev.innerHTML = prev.innerHTML.replace('⟳','✓'); }
+    if (stepIdx < steps.length) { document.getElementById(steps[stepIdx]).className='loading-step active'; stepIdx++; }
+    else clearInterval(stepTimer);
+  }, 5000);
+
+  var OWNERS = { '76104455': 'Matt Valin', '55217954': 'Joe Haine', '83862037': 'Tim Grisham', '78304576': 'Chris Knapp', '87806380': 'Chiara Pate' };
+
+  fetch('/.netlify/functions/generate', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      company: state.company,
+      allContacts: state.allContacts,
+      selectedContacts: selected,
+      customContacts: state.customContacts,
+      campaign: state.campaign,
+      notes: state.notes,
+      accountOwner: state.company.owner,
+    }),
+  })
+  .then(function(r) { return r.json(); })
+  .then(function(data) {
+    clearInterval(stepTimer);
+    document.getElementById('loadingState').style.display = 'none';
+    if (data.error) { showError(data.error); return; }
+    state.brief = data.brief;
+    renderBrief(data.brief);
+    document.getElementById('briefDisplay').style.display = 'block';
+  })
+  .catch(function(err) {
+    clearInterval(stepTimer);
+    document.getElementById('loadingState').style.display = 'none';
+    showError(err.message);
+  });
+}
+
+function showError(msg) {
+  var el = document.getElementById('errorState');
+  el.style.display = 'block';
+  el.innerHTML = '<div class="error-box"><strong>Generation failed:</strong> ' + escH(msg) + '<br><br><button class="btn btn-ghost btn-sm" onclick="goStep(3)">← Try Again</button></div>';
+}
+
+// ── RENDER BRIEF ─────────────────────────────────────────────────────────────
+function renderBrief(b) {
+  // Header
+  var contactNames = (b.contacts_meeting || []).join(' &nbsp;·&nbsp; ');
+  document.getElementById('briefHeader').innerHTML =
+    '<div class="brief-title">MEETING PREP BRIEF</div>'
+    +'<div class="brief-subtitle">'+escH(b.company)+(b.location?' &nbsp;|&nbsp; '+escH(b.location):'')+'</div>'
+    +'<div class="brief-meta">'+(contactNames||'')+(b.campaign?' &nbsp;|&nbsp; '+escH(b.campaign):'')+(b.account_owner?' &nbsp;|&nbsp; Acct: '+escH(b.account_owner):'')+(b.date?' &nbsp;|&nbsp; '+escH(b.date):'')+'</div>';
+
+  // Sections
+  document.getElementById('briefBody').innerHTML = (b.sections||[]).map(renderSection).join('');
+}
+
+function renderSection(s) {
+  var content = '';
+
+  if (s.type === 'table') {
+    content = '<table class="brief-table">'
+      +(s.rows||[]).map(function(r,i){return '<tr><td>'+escH(r.label)+'</td><td>'+escH(r.value)+'</td></tr>';}).join('')
+      +'</table>';
+  }
+  else if (s.type === 'profiles') {
+    content = (s.profiles||[]).map(function(p) {
+      return '<div class="profile-block">'
+        +'<div class="profile-name">'+escH(p.name)+'</div>'
+        +(p.subtitle?'<div class="profile-subtitle">'+escH(p.subtitle)+'</div>':'')
+        +'<table class="brief-table" style="margin-top:8px">'
+          +(p.table||[]).map(function(r){return '<tr><td>'+escH(r.label)+'</td><td>'+escH(r.value)+'</td></tr>';}).join('')
+        +'</table>'
+        +(p.body?'<div class="profile-body">'+escH(p.body)+'</div>':'')
+        +'</div>';
+    }).join('');
+  }
+  else if (s.type === 'crm') {
+    var statusClass = {'Booked Meeting':'s-booked','Replied':'s-replied','Active':'s-active','Stale':'s-stale','Left Org':'s-bad','Not Interested':'s-bad'};
+    content = (s.narrative?'<div class="crm-narrative">'+escH(s.narrative)+'</div>':'')
+      +'<table class="crm-table"><thead><tr><th>Name</th><th>Title</th><th>Status</th><th>Notes</th></tr></thead><tbody>'
+      +(s.contacts||[]).map(function(c){
+        var cls = statusClass[c.status]||'s-stale';
+        return '<tr><td style="font-weight:500">'+escH(c.name)+'</td><td>'+escH(c.title||'')+'</td><td><span class="status-badge '+cls+'">'+escH(c.status)+'</span></td><td style="color:var(--text3)">'+escH(c.notes||'')+'</td></tr>';
+      }).join('')
+      +'</tbody></table>';
+  }
+  else if (s.type === 'bullets_grouped') {
+    content = (s.groups||[]).map(function(g){
+      return '<div class="bullet-group">'
+        +(g.heading?'<div class="bullet-group-heading">'+escH(g.heading)+'</div>':'')
+        +'<ul class="bullet-list">'+(g.bullets||[]).map(function(b){return '<li>'+escH(b)+'</li>';}).join('')+'</ul>'
+        +'</div>';
+    }).join('');
+  }
+  else if (s.type === 'bullets') {
+    content = '<ul class="watch-list">'+(s.bullets||[]).map(function(b){return '<li>'+escH(b)+'</li>';}).join('')+'</ul>';
+  }
+  else if (s.type === 'angles') {
+    content = (s.items||[]).map(function(a){
+      return '<div class="angle-item"><div class="angle-heading">'+escH(a.heading)+'</div><div class="angle-body">'+escH(a.body)+'</div></div>';
+    }).join('');
+  }
+
+  return '<div class="brief-section"><div class="section-heading">'+escH(s.heading)+'</div>'+content+'</div>';
+}
+
+// ── DOCX EXPORT ──────────────────────────────────────────────────────────────
+function downloadDocx() {
+  if (!state.brief) return;
+  var b = state.brief;
+  var D = docx;
+
+  var NAVY="1F3864", ACCENT="2E75B6", GRAY="666666", MID="333333",
+      LIGHT="F2F7FC", BORDER="BDD7EE", GREEN="375623";
+  var brd = {style:D.BorderStyle.SINGLE,size:1,color:BORDER};
+  var borders = {top:brd,bottom:brd,left:brd,right:brd};
+
+  var h1 = function(t) { return new D.Paragraph({spacing:{before:320,after:120},border:{bottom:{style:D.BorderStyle.SINGLE,size:6,color:ACCENT,space:4}},children:[new D.TextRun({text:t,bold:true,font:"Arial",size:28,color:NAVY})]}); };
+  var h2 = function(t) { return new D.Paragraph({spacing:{before:200,after:80},children:[new D.TextRun({text:t,bold:true,font:"Arial",size:24,color:ACCENT})]}); };
+  var sp = function() { return new D.Paragraph({spacing:{before:80,after:80},children:[new D.TextRun("")]}); };
+  var body = function(t) { return new D.Paragraph({spacing:{before:60,after:80},children:[new D.TextRun({text:t,font:"Arial",size:20,color:MID})]}); };
+  var bul = function(t) { return new D.Paragraph({numbering:{reference:"bullets",level:0},spacing:{before:40,after:40},children:[new D.TextRun({text:t,font:"Arial",size:20,color:MID})]}); };
+
+  var tRow = function(l,v,s) { return new D.TableRow({children:[
+    new D.TableCell({borders,width:{size:2800,type:D.WidthType.DXA},shading:{fill:s?LIGHT:"FFFFFF",type:D.ShadingType.CLEAR},margins:{top:80,bottom:80,left:120,right:120},children:[new D.Paragraph({children:[new D.TextRun({text:l,bold:true,font:"Arial",size:20,color:NAVY})]})]}),
+    new D.TableCell({borders,width:{size:6560,type:D.WidthType.DXA},shading:{fill:s?LIGHT:"FFFFFF",type:D.ShadingType.CLEAR},margins:{top:80,bottom:80,left:120,right:120},children:[new D.Paragraph({children:[new D.TextRun({text:v,font:"Arial",size:20,color:MID})]})]}),
+  ]});};
+
+  var cRow = function(n,t,st,nt,s) {
+    var sc = st==="Booked Meeting"?ACCENT:st==="Replied"?GREEN:st==="Not Interested"?RED:GRAY;
+    return new D.TableRow({children:[
+      new D.TableCell({borders,width:{size:2200,type:D.WidthType.DXA},shading:{fill:s?LIGHT:"FFFFFF",type:D.ShadingType.CLEAR},margins:{top:80,bottom:80,left:120,right:120},children:[new D.Paragraph({children:[new D.TextRun({text:n,bold:true,font:"Arial",size:19,color:MID})]})] }),
+      new D.TableCell({borders,width:{size:3500,type:D.WidthType.DXA},shading:{fill:s?LIGHT:"FFFFFF",type:D.ShadingType.CLEAR},margins:{top:80,bottom:80,left:120,right:120},children:[new D.Paragraph({children:[new D.TextRun({text:t,font:"Arial",size:19,color:MID})]})] }),
+      new D.TableCell({borders,width:{size:1400,type:D.WidthType.DXA},shading:{fill:s?LIGHT:"FFFFFF",type:D.ShadingType.CLEAR},margins:{top:80,bottom:80,left:120,right:120},children:[new D.Paragraph({children:[new D.TextRun({text:st,bold:true,font:"Arial",size:19,color:sc})]})] }),
+      new D.TableCell({borders,width:{size:1660,type:D.WidthType.DXA},shading:{fill:s?LIGHT:"FFFFFF",type:D.ShadingType.CLEAR},margins:{top:80,bottom:80,left:120,right:120},children:[new D.Paragraph({children:[new D.TextRun({text:nt||'',font:"Arial",size:19,color:GRAY})]})] }),
+    ]});
+  };
+
+  var hdrRow = function(cols) { return new D.TableRow({children:cols.map(function(c){return new D.TableCell({borders,shading:{fill:NAVY,type:D.ShadingType.CLEAR},margins:{top:80,bottom:80,left:120,right:120},children:[new D.Paragraph({children:[new D.TextRun({text:c,bold:true,font:"Arial",size:19,color:"FFFFFF"})]})]  });})}); };
+
+  var children = [
+    new D.Paragraph({spacing:{before:0,after:80},children:[new D.TextRun({text:"MEETING PREP BRIEF",bold:true,font:"Arial",size:36,color:NAVY})]}),
+    new D.Paragraph({spacing:{before:0,after:40},children:[new D.TextRun({text:b.company+(b.location?"  |  "+b.location:""),font:"Arial",size:26,color:ACCENT})]}),
+    new D.Paragraph({spacing:{before:0,after:200},children:[new D.TextRun({text:(b.contacts_meeting||[]).join(" · ")+(b.campaign?"  |  "+b.campaign:"")+(b.account_owner?"  |  Acct: "+b.account_owner:"")+(b.date?"  |  "+b.date:""),font:"Arial",size:20,color:GRAY})]}),
+  ];
+
+  (b.sections||[]).forEach(function(s) {
+    children.push(h1(s.heading));
+
+    if (s.type === "table") {
+      children.push(new D.Table({width:{size:9360,type:D.WidthType.DXA},columnWidths:[2800,6560],rows:(s.rows||[]).map(function(r,i){return tRow(r.label,r.value,i%2===0);})}));
+    }
+    else if (s.type === "profiles") {
+      (s.profiles||[]).forEach(function(p) {
+        children.push(new D.Paragraph({spacing:{before:80,after:80},children:[new D.TextRun({text:p.name,bold:true,font:"Arial",size:22,color:NAVY})]}));
+        if (p.subtitle) children.push(new D.Paragraph({spacing:{before:0,after:80},children:[new D.TextRun({text:p.subtitle,font:"Arial",size:20,color:ACCENT})]}));
+        if (p.table && p.table.length) children.push(new D.Table({width:{size:9360,type:D.WidthType.DXA},columnWidths:[2800,6560],rows:p.table.map(function(r,i){return tRow(r.label,r.value,i%2===0);})}));
+        if (p.body) { children.push(sp()); children.push(body(p.body)); }
+      });
+    }
+    else if (s.type === "crm") {
+      if (s.narrative) { children.push(body(s.narrative)); children.push(sp()); }
+      children.push(new D.Table({width:{size:9360,type:D.WidthType.DXA},columnWidths:[2200,3500,1400,1660],rows:[hdrRow(["Name","Title","Status","Notes"])].concat((s.contacts||[]).map(function(c,i){return cRow(c.name,c.title||'',c.status||'',c.notes||'',i%2===0);}))}));
+    }
+    else if (s.type === "bullets_grouped") {
+      (s.groups||[]).forEach(function(g) {
+        if (g.heading) children.push(h2(g.heading));
+        (g.bullets||[]).forEach(function(bl) { children.push(bul(bl)); });
+        children.push(sp());
+      });
+    }
+    else if (s.type === "angles") {
+      (s.items||[]).forEach(function(a) {
+        children.push(h2(a.heading));
+        children.push(body(a.body));
+        children.push(sp());
+      });
+    }
+    else if (s.type === "bullets") {
+      (s.bullets||[]).forEach(function(bl) { children.push(bul(bl)); });
+    }
+
+    children.push(sp());
+  });
+
+  children.push(new D.Paragraph({spacing:{before:280,after:0},border:{top:{style:D.BorderStyle.SINGLE,size:4,color:BORDER,space:6}},children:[new D.TextRun({text:"Prepared by Care Continuity  |  CarePathIQ Sales Intelligence  |  "+b.date+"  |  Confidential",font:"Arial",size:18,color:GRAY,italic:true})]}));
+
+  var doc = new D.Document({
+    numbering:{config:[{reference:"bullets",levels:[{level:0,format:D.LevelFormat.BULLET,text:"\u2022",alignment:D.AlignmentType.LEFT,style:{paragraph:{indent:{left:720,hanging:360}}}}]}]},
+    sections:[{properties:{page:{size:{width:12240,height:15840},margin:{top:1080,right:1080,bottom:1080,left:1080}}},children:children}]
+  });
+
+  D.Packer.toBlob(doc).then(function(blob) {
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a');
+    a.href = url;
+    a.download = b.company.replace(/[^a-zA-Z0-9]/g,'_')+'_MeetingBrief_'+new Date().toISOString().slice(0,10)+'.docx';
+    a.click();
+    URL.revokeObjectURL(url);
+  });
+}
+
+// ── UTILS ─────────────────────────────────────────────────────────────────────
+function escH(s) {
+  return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+</script>
+</body>
+</html>
