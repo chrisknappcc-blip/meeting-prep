@@ -188,6 +188,10 @@ label{display:block;font-size:10px;font-weight:600;color:var(--text3);text-trans
 .row{display:flex;gap:12px}
 .row > *{flex:1}
 .empty-state{padding:40px;text-align:center;color:var(--text3);font-size:12px}
+.manual-co-badge{display:inline-block;padding:2px 7px;border-radius:3px;font-size:9px;font-weight:700;background:rgba(245,166,35,.2);color:var(--amber);border:1px solid rgba(245,166,35,.35);margin-left:6px;vertical-align:middle}
+.skip-contacts-bar{padding:10px 14px;background:rgba(79,142,247,.07);border:1px dashed rgba(79,142,247,.3);border-radius:var(--r);font-size:11px;color:var(--text2);display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:8px}
+.use-manually-row{padding:10px 14px;border-top:1px solid var(--border);cursor:pointer;display:flex;align-items:center;gap:8px;font-size:11px;color:var(--text3);transition:background .1s}
+.use-manually-row:hover{background:var(--hover);color:var(--text)}
 .badge{display:inline-block;padding:2px 7px;border-radius:3px;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.04em}
 .selected-summary{font-size:11px;color:var(--text3);margin-top:8px}
 .selected-summary strong{color:var(--accent)}
@@ -238,6 +242,10 @@ label{display:block;font-size:10px;font-weight:600;color:var(--text3);text-trans
         <span id="contactCount" style="font-size:10px;color:var(--text3)"></span>
       </div>
       <div class="card-body">
+        <div id="skipContactsBanner" style="display:none" class="skip-contacts-bar">
+          <span>This is a manual entry — no HubSpot contacts to load. Add specific people below if you have them, or skip to Context.</span>
+          <button class="btn btn-primary btn-sm" onclick="goStep(3)">Skip to Context →</button>
+        </div>
         <div class="contact-filter-bar">
           <input type="text" id="contactSearch" placeholder="Search by name or title..." oninput="renderContacts()">
           <span class="filter-chip" id="fc-all" onclick="setFilter('all')">All</span>
@@ -264,7 +272,7 @@ label{display:block;font-size:10px;font-weight:600;color:var(--text3);text-trans
     </div>
 
     <div style="display:flex;justify-content:flex-end">
-      <button class="btn btn-primary" onclick="goStep(3)" id="toStep3Btn">Continue →</button>
+      <button class="btn btn-primary" onclick="proceedToContext()" id="toStep3Btn">Continue →</button>
     </div>
   </div>
 
@@ -384,8 +392,14 @@ function searchCompany(q) {
       .then(function(r) { return r.json(); })
       .then(function(results) {
         var el = document.getElementById('searchResults');
-        if (!results.length) { el.innerHTML = '<div class="empty-state">No companies found</div>'; }
+        if (!results.length) {
+          el.innerHTML = '<div class="empty-state" style="padding:16px">No companies found in HubSpot</div>'
+            + '<div class="use-manually-row" data-name="' + escH(q) + '" onclick="selectManualFromRow(this)">'
+            + '<span style="color:var(--accent)">+</span> Use <strong style="margin:0 4px">' + escH(q) + '</strong> as a manual entry — research brief</div>';
+        }
         else {
+          var manualRow = '<div class="use-manually-row" data-name="' + escH(q) + '" onclick="selectManualFromRow(this)">'
+            + '<span style="color:var(--accent)">+</span> Use <strong style="margin:0 4px">' + escH(q) + '</strong> manually — research brief</div>';
           el.innerHTML = results.map(function(c) {
             var loc = [c.city, c.state].filter(Boolean).join(', ');
             var la = c.lastActivity ? new Date(c.lastActivity).toLocaleDateString('en-US',{month:'short',year:'numeric'}) : '';
@@ -393,7 +407,7 @@ function searchCompany(q) {
               +'<div><div class="result-name">'+escH(c.name)+'</div><div class="result-meta">'+(loc||'&nbsp;')+(c.owner?' · '+c.owner:'')+'</div></div>'
               +'<div class="result-notes">'+(c.notes||0)+' notes'+(la?' · '+la:'')+'</div>'
               +'</div>';
-          }).join('');
+          }).join('') + manualRow;
         }
         el.classList.add('visible');
       });
@@ -414,8 +428,36 @@ function selectCompany(c) {
 }
 
 // ── STEP 2: CONTACTS ──────────────────────────────────────────────────────────
+function selectManualFromRow(el) {
+  selectManualCompany(el.getAttribute('data-name') || '');
+}
+
+function selectManualCompany(name) {
+  name = name.trim();
+  if (!name) return;
+  state.company = { id: null, name: name, city: '', state: '', domain: '', notes: 0, owner: '', lastActivity: '', manual: true };
+  document.getElementById('searchResults').classList.remove('visible');
+  document.getElementById('companySearch').value = name;
+  document.getElementById('selectedCompanyDisplay').innerHTML =
+    '<div style="background:var(--amberl,rgba(245,166,35,.1));border:1px solid rgba(245,166,35,.25);border-radius:var(--r);padding:10px 14px;display:flex;align-items:center;justify-content:space-between">'
+    +'<div><div style="font-weight:600;font-size:12px">' + escH(name) + '<span class="manual-co-badge">Manual Entry</span></div>'
+    +'<div style="font-size:10px;color:var(--text3);margin-top:2px">No HubSpot record &nbsp;&middot;&nbsp; Research brief mode &nbsp;&middot;&nbsp; Skip to context or add contacts manually</div></div>'
+    +'<div style="display:flex;gap:8px">'
+    +'<button class="btn btn-ghost btn-sm" onclick="goStep(2); skipContacts();">Add Contacts</button>'
+    +'<button class="btn btn-primary btn-sm" onclick="goStep(3)">Skip to Context →</button>'
+    +'</div></div>';
+  document.getElementById('selectedCompanyDisplay').style.display = 'block';
+}
+
+function skipContacts() {
+  state.allContacts = [];
+  state.selectedIds = new Set();
+  renderContacts();
+}
+
 function loadContacts() {
   contactFilter = 'all'; setFilter('all');
+  if (state.company && state.company.manual) { skipContacts(); return; }
   document.getElementById('contactList').innerHTML = '<div class="empty-state"><div class="spinner" style="width:20px;height:20px;border-width:2px;margin:0 auto 8px"></div>Loading contacts...</div>';
   goStep(2);
   fetch('/.netlify/functions/hs-contacts?id=' + state.company.id)
@@ -425,6 +467,15 @@ function loadContacts() {
       document.getElementById('contactCount').textContent = data.total + ' contacts';
       renderContacts();
     });
+}
+
+function proceedToContext() {
+  var selected = state.allContacts.filter(function(c){ return state.selectedIds.has(c.id); });
+  var total = selected.length + state.customContacts.length;
+  if (total === 0 && !state.company.manual) {
+    if (!confirm('No contacts selected. Continue as a research brief with no specific contacts?')) return;
+  }
+  goStep(3);
 }
 
 function setFilter(f) {
@@ -437,8 +488,13 @@ function setFilter(f) {
 }
 
 function renderContacts() {
+  var banner = document.getElementById('skipContactsBanner');
+  if (banner) banner.style.display = (state.company && state.company.manual) ? 'flex' : 'none';
   var list = document.getElementById('contactList');
-  if (!state.allContacts.length) { list.innerHTML = '<div class="empty-state">No contacts found for this company</div>'; return; }
+  if (!state.allContacts.length) {
+    if (state.company && state.company.manual) { list.innerHTML = ''; return; }
+    list.innerHTML = '<div class="empty-state">No contacts found for this company</div>'; return;
+  }
 
   var searchVal = ((document.getElementById('contactSearch')||{}).value||'').toLowerCase();
   var SENIOR_KEYWORDS = ['chief','ceo','coo','cfo','cmo','cio','cso','cto','svp','evp','vice president','vp ','president','director','medical officer'];
@@ -536,10 +592,7 @@ function generate() {
   state.notes = document.getElementById('contextNotes').value.trim();
 
   var selected = state.allContacts.filter(function(c){ return state.selectedIds.has(c.id); });
-  if (selected.length === 0 && state.customContacts.length === 0) {
-    alert('Please select at least one contact for the meeting.');
-    return;
-  }
+  // Allow zero contacts for research briefs
 
   goStep(4);
   document.getElementById('loadingState').style.display = 'block';
@@ -572,6 +625,7 @@ function generate() {
       campaign: state.campaign,
       notes: state.notes,
       accountOwner: state.company.owner,
+      isResearch: (selected.length === 0 && state.customContacts.length === 0),
     }),
   })
   .then(function(res) {
