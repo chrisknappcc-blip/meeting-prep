@@ -374,7 +374,7 @@ var currentStep = 1;
 // ── NAVIGATION ────────────────────────────────────────────────────────────────
 function goStep(n) {
   if (n === 2 && !state.company) return;
-  if (n === 3 && state.selectedIds.size === 0 && state.customContacts.length === 0 && !(state.company && state.company.manual)) return;
+  // no contact requirement — zero contacts is valid for research briefs
   currentStep = n;
   [1,2,3,4].forEach(function(i) {
     document.getElementById('view'+i).style.display = i===n?'':'none';
@@ -482,12 +482,6 @@ function loadContacts() {
 }
 
 function proceedToContext() {
-  if (state.company && state.company.manual) { goStep(3); return; }
-  var selected = state.allContacts.filter(function(c){ return state.selectedIds.has(c.id); });
-  var total = selected.length + state.customContacts.length;
-  if (total === 0) {
-    if (!confirm('No contacts selected. Continue as a research brief?')) return;
-  }
   goStep(3);
 }
 
@@ -605,7 +599,7 @@ function generate() {
   state.notes = document.getElementById('contextNotes').value.trim();
 
   var selected = state.allContacts.filter(function(c){ return state.selectedIds.has(c.id); });
-  // Allow zero contacts for research briefs
+
 
   goStep(4);
   document.getElementById('loadingState').style.display = 'block';
