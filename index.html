@@ -374,7 +374,7 @@ var currentStep = 1;
 // ── NAVIGATION ────────────────────────────────────────────────────────────────
 function goStep(n) {
   if (n === 2 && !state.company) return;
-  if (n === 3 && state.selectedIds.size === 0 && state.customContacts.length === 0) return;
+  if (n === 3 && state.selectedIds.size === 0 && state.customContacts.length === 0 && !(state.company && state.company.manual)) return;
   currentStep = n;
   [1,2,3,4].forEach(function(i) {
     document.getElementById('view'+i).style.display = i===n?'':'none';
@@ -482,10 +482,11 @@ function loadContacts() {
 }
 
 function proceedToContext() {
+  if (state.company && state.company.manual) { goStep(3); return; }
   var selected = state.allContacts.filter(function(c){ return state.selectedIds.has(c.id); });
   var total = selected.length + state.customContacts.length;
-  if (total === 0 && !state.company.manual) {
-    if (!confirm('No contacts selected. Continue as a research brief with no specific contacts?')) return;
+  if (total === 0) {
+    if (!confirm('No contacts selected. Continue as a research brief?')) return;
   }
   goStep(3);
 }
