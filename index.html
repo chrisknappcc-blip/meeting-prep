@@ -58,7 +58,16 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;backgrou
 .result-notes{font-size:10px;color:var(--text3);font-family:var(--mono)}
 
 /* Contact list */
-.contact-list{display:flex;flex-direction:column;gap:6px;max-height:400px;overflow-y:auto}
+.contact-filter-bar{display:flex;gap:6px;margin-bottom:8px;flex-wrap:wrap;align-items:center}
+.contact-filter-bar input{flex:1;min-width:160px;background:var(--sec);border:1px solid var(--borderl);color:var(--text);font-size:11px;padding:6px 10px;border-radius:var(--r);outline:none}
+.contact-filter-bar input:focus{border-color:var(--accent)}
+.filter-chip{display:inline-flex;align-items:center;gap:4px;padding:4px 10px;border-radius:20px;font-size:10px;font-weight:600;cursor:pointer;border:1px solid var(--borderl);background:var(--sec);color:var(--text3);transition:all .12s;white-space:nowrap}
+.filter-chip:hover{border-color:var(--accent);color:var(--accent)}
+.filter-chip.active{background:var(--acl);border-color:var(--accent);color:var(--accent)}
+.filter-chip.fc-booked.active{background:rgba(52,201,122,.15);border-color:var(--green);color:var(--green)}
+.filter-chip.fc-replied.active{background:var(--acl);border-color:var(--accent);color:var(--accent)}
+.filter-chip.fc-untouched.active{background:var(--sec);border-color:var(--borderl);color:var(--text2)}
+.contact-list{display:flex;flex-direction:column;gap:6px;max-height:380px;overflow-y:auto}
 .contact-list::-webkit-scrollbar{width:4px}
 .contact-list::-webkit-scrollbar-thumb{background:var(--borderl);border-radius:2px}
 .contact-row{display:flex;align-items:center;gap:10px;padding:8px 12px;border-radius:var(--r);border:1px solid var(--border);cursor:pointer;transition:all .1s;background:var(--sec)}
@@ -229,6 +238,14 @@ label{display:block;font-size:10px;font-weight:600;color:var(--text3);text-trans
         <span id="contactCount" style="font-size:10px;color:var(--text3)"></span>
       </div>
       <div class="card-body">
+        <div class="contact-filter-bar">
+          <input type="text" id="contactSearch" placeholder="Search by name or title..." oninput="renderContacts()">
+          <span class="filter-chip" id="fc-all" onclick="setFilter('all')">All</span>
+          <span class="filter-chip fc-booked" id="fc-booked" onclick="setFilter('booked')">⚡ Booked</span>
+          <span class="filter-chip fc-replied" id="fc-replied" onclick="setFilter('replied')">↩ Replied</span>
+          <span class="filter-chip" id="fc-senior" onclick="setFilter('senior')">C-Suite / VP</span>
+          <span class="filter-chip fc-untouched" id="fc-untouched" onclick="setFilter('untouched')">No Outreach</span>
+        </div>
         <div class="contact-list" id="contactList"></div>
         <div class="selected-summary" id="selectedSummary"></div>
       </div>
@@ -321,6 +338,7 @@ label{display:block;font-size:10px;font-weight:600;color:var(--text3);text-trans
 
 <script>
 // ── STATE ─────────────────────────────────────────────────────────────────────
+var contactFilter = 'all';
 var state = {
   company: null,
   allContacts: [],
@@ -397,6 +415,7 @@ function selectCompany(c) {
 
 // ── STEP 2: CONTACTS ──────────────────────────────────────────────────────────
 function loadContacts() {
+  contactFilter = 'all'; setFilter('all');
   document.getElementById('contactList').innerHTML = '<div class="empty-state"><div class="spinner" style="width:20px;height:20px;border-width:2px;margin:0 auto 8px"></div>Loading contacts...</div>';
   goStep(2);
   fetch('/.netlify/functions/hs-contacts?id=' + state.company.id)
@@ -408,11 +427,40 @@ function loadContacts() {
     });
 }
 
+function setFilter(f) {
+  contactFilter = f;
+  ['all','booked','replied','senior','untouched'].forEach(function(id) {
+    var el = document.getElementById('fc-'+id);
+    if(el) el.classList.toggle('active', id===f);
+  });
+  renderContacts();
+}
+
 function renderContacts() {
   var list = document.getElementById('contactList');
   if (!state.allContacts.length) { list.innerHTML = '<div class="empty-state">No contacts found for this company</div>'; return; }
 
-  list.innerHTML = state.allContacts.map(function(c) {
+  var searchVal = ((document.getElementById('contactSearch')||{}).value||'').toLowerCase();
+  var SENIOR_KEYWORDS = ['chief','ceo','coo','cfo','cmo','cio','cso','cto','svp','evp','vice president','vp ','president','director','medical officer'];
+
+  var visible = state.allContacts.filter(function(c) {
+    if(searchVal && !c.name.toLowerCase().includes(searchVal) && !(c.title||'').toLowerCase().includes(searchVal)) return false;
+    if(contactFilter === 'booked') return c.signals && c.signals.includes('BOOKED_MEETING');
+    if(contactFilter === 'replied') return c.replyAgeDays !== null;
+    if(contactFilter === 'senior') {
+      var t = (c.title||'').toLowerCase();
+      return SENIOR_KEYWORDS.some(function(k){return t.includes(k);});
+    }
+    if(contactFilter === 'untouched') return c.notes === 0;
+    return true;
+  });
+
+  if(!visible.length) {
+    list.innerHTML = '<div class="empty-state" style="font-size:11px;color:var(--text3);padding:20px;text-align:center">No contacts match this filter</div>';
+    return;
+  }
+
+  list.innerHTML = visible.map(function(c) {
     var selected = state.selectedIds.has(c.id);
     var sigs = buildSignalBadges(c);
     var stats = [c.notes+' notes', c.sequences+' seq'];
