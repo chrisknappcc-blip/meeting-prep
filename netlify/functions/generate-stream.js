@@ -136,7 +136,12 @@ Return only JSON.`;
       const heartbeat = setInterval(() => send({ type: 'ping' }), 5000);
 
       try {
-        const res = await fetch('https://api.anthropic.com/v1/messages', {
+        const controller = new AbortController();
+        const fetchTimeout = setTimeout(() => controller.abort(), 110000); // 110s hard limit
+        let res;
+        try {
+          res = await fetch('https://api.anthropic.com/v1/messages', {
+            signal: controller.signal,
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -152,6 +157,10 @@ Return only JSON.`;
         });
 
         clearInterval(heartbeat);
+
+        } finally {
+          clearTimeout(fetchTimeout);
+        }
 
         if (!res.ok) {
           const err = await res.text();
