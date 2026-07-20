@@ -327,13 +327,16 @@ label{display:block;font-size:10px;font-weight:600;color:var(--text3);text-trans
       <div class="card">
         <div class="loading-wrap">
           <div class="spinner"></div>
-          <div class="loading-title">Researching and writing your brief...</div>
-          <div class="loading-sub">Searching for recent news, leadership changes, and strategic context</div>
-          <div class="loading-steps" id="loadingSteps">
-            <div class="loading-step active" id="ls1">⟳ Pulling HubSpot engagement data</div>
-            <div class="loading-step" id="ls2">⟳ Searching for recent company news</div>
-            <div class="loading-step" id="ls3">⟳ Researching leadership and strategy</div>
-            <div class="loading-step" id="ls4">⟳ Synthesizing and writing brief</div>
+          <div class="loading-title" id="loadingTitle">Starting up...</div>
+          <div class="loading-sub" id="loadingSub">Connecting to HubSpot and Anthropic</div>
+          <div style="margin-top:18px;width:100%;max-width:320px;margin-left:auto;margin-right:auto">
+            <div style="height:4px;background:var(--border);border-radius:2px;overflow:hidden">
+              <div id="loadingBar" style="height:100%;width:0%;background:var(--accent);border-radius:2px;transition:width 8s ease-out"></div>
+            </div>
+            <div style="display:flex;justify-content:space-between;margin-top:6px">
+              <div id="loadingElapsed" style="font-size:10px;color:var(--text3)">0s elapsed</div>
+              <div id="loadingEst" style="font-size:10px;color:var(--text3)">Est. 45–75s</div>
+            </div>
           </div>
         </div>
       </div>
@@ -606,20 +609,34 @@ function generate() {
   document.getElementById('briefDisplay').style.display = 'none';
   document.getElementById('errorState').style.display = 'none';
 
-  // Animate loading steps
-  var steps = ['ls1','ls2','ls3','ls4'];
-  var stepIdx = 0;
+  // Live elapsed timer + stage-aware messaging
+  var genStart = Date.now();
+  var STAGES = [
+    { at:0,   title:'Searching for recent news...',           sub:'Running web searches on company news and leadership' },
+    { at:15,  title:'Researching leadership and strategy...', sub:'Reading company pages and recent announcements' },
+    { at:35,  title:'Reviewing EHR and technology profile...', sub:'Checking tech stack and digital health initiatives' },
+    { at:55,  title:'Writing your brief...',                  sub:'Synthesizing everything into structured sections' },
+    { at:75,  title:'Finalizing and formatting...',           sub:'Almost there — adding sources and meeting angles' },
+    { at:95,  title:'Taking longer than usual...',            sub:'Complex account — still working. Hang tight.' },
+  ];
+  var lastStage = -1;
   var stepTimer = setInterval(function() {
-    if (stepIdx > 0) {
-      var prev = document.getElementById(steps[stepIdx-1]);
-      if(prev){ prev.className='loading-step done'; prev.innerHTML=prev.innerHTML.replace('⟳','✓'); }
+    var elapsed = Math.round((Date.now() - genStart) / 1000);
+    var el = document.getElementById('loadingElapsed');
+    if (el) el.textContent = elapsed + 's elapsed';
+    // Progress bar — caps at 95%
+    var bar = document.getElementById('loadingBar');
+    if (bar) bar.style.width = Math.min(95, elapsed * 1.1) + '%';
+    // Stage messaging
+    var stage = STAGES.filter(function(s){ return elapsed >= s.at; }).pop();
+    if (stage && STAGES.indexOf(stage) !== lastStage) {
+      lastStage = STAGES.indexOf(stage);
+      var t = document.getElementById('loadingTitle');
+      var s2 = document.getElementById('loadingSub');
+      if (t) t.textContent = stage.title;
+      if (s2) s2.textContent = stage.sub;
     }
-    if (stepIdx < steps.length) {
-      var cur = document.getElementById(steps[stepIdx]);
-      if(cur) cur.className='loading-step active';
-      stepIdx++;
-    } else clearInterval(stepTimer);
-  }, 8000);
+  }, 1000);
 
   fetch('/.netlify/functions/generate-stream', {
     method: 'POST',
