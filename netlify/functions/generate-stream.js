@@ -15,7 +15,7 @@ HubSpot signal patterns:
 - REPLIED_30D = hot, REPLIED_90D = warm
 - Multiple seniors replying in same week = internal discussion happening
 
-Brief structure — 9 sections:
+Brief structure — 9 sections + Sources:
 1. Company Snapshot: key facts table
 2. Who You Are Meeting: profile per contact with table + paragraph
 3. Account Activity: CRM contact table + narrative
@@ -25,6 +25,17 @@ Brief structure — 9 sections:
 7. Technology & EHR Profile: which EHR platform they run (Epic, Oracle Health/Cerner, Meditech, etc.), how long they have been on it, known modules or features in use, major tech implementations or migrations underway, AI and digital health initiatives, known vendor partnerships. Critically — assess their historical posture toward external point solutions: are they an Epic App Orchard-first shop, do they prefer best-of-breed, have they adopted outside tools before, or do they tend to consolidate onto a single platform? This directly affects how CarePathIQ gets evaluated.
 8. Meeting Angles: 4-6 specific actionable talking points tied to these contacts' roles
 9. Things to Watch: flags, risks, blockers
+
+Web research — run these searches before writing:
+1. "[Company name] 2025 2026 strategic plan expansion news" — what they're building
+2. "[Company name] emergency department OR patient access OR ED Connect 2025 2026" — direct relevance
+3. "[Company name] CEO leadership OR CFO OR CSO news 2025 2026" — leadership context
+4. "[Company name] Epic OR EHR OR technology OR AI 2025 2026" — tech posture
+5. Any searches specific to the contacts' titles or the campaign context
+
+Be selective — only include information that is recent (within 18 months), specific to this organization, and relevant to why CarePathIQ matters to these people. Do not pad with generic industry observations.
+
+Collect every URL you searched or read. Cite them in the Sources section at the end of the brief.
 
 Writing style: Human, direct, no em dashes, no hyphens as connectors, no corporate filler, specific not generic.
 
@@ -46,7 +57,8 @@ Return ONLY valid JSON:
     {"id":"technology","heading":"Technology & EHR Profile","type":"bullets_grouped","groups":[{"heading":"string or null","bullets":["string"]}]},
     {"id":"angles","heading":"Meeting Angles","type":"angles","items":[{"heading":"string","body":"string"}]},
     {"id":"watch","heading":"Things to Watch","type":"bullets","bullets":["string"]},
-    {"id":"recommended","heading":"Recommended Contacts","type":"recommended","note":"RESEARCH BRIEF ONLY — omit for meeting prep","contacts":[{"name":"string (real name OR role title if name unknown)","title":"string","isNamed":true,"priority":"string (1-Primary, 2-Secondary, 3-Supporting)","why":"string (why this person for this specific campaign)","findVia":"string (LinkedIn title search, conference, referral from X, etc.)"}]}
+    {"id":"recommended","heading":"Recommended Contacts","type":"recommended","note":"RESEARCH BRIEF ONLY — omit for meeting prep","contacts":[{"name":"string (real name OR role title if name unknown)","title":"string","isNamed":true,"priority":"string (1-Primary, 2-Secondary, 3-Supporting)","why":"string (why this person for this specific campaign)","findVia":"string (LinkedIn title search, conference, referral from X, etc.)"}]},
+    {"id":"sources","heading":"Sources & References","type":"sources","sources":[{"title":"string (page or article title)","url":"string (full URL)","category":"string (e.g. Press Release, News, Company Website, LinkedIn, Annual Report, Health System Profile)","note":"string (brief note on what this source contributed)"}]}
   ]
 }`;
 
