@@ -15,14 +15,16 @@ HubSpot signal patterns:
 - REPLIED_30D = hot, REPLIED_90D = warm
 - Multiple seniors replying in same week = internal discussion happening
 
-Brief structure — 7 sections:
+Brief structure — 9 sections:
 1. Company Snapshot: key facts table
 2. Who You Are Meeting: profile per contact with table + paragraph
 3. Account Activity: CRM contact table + narrative
 4. Leadership Context: recent changes, new hires
 5. Strategic Context: ED/access, AI, expansion, financial
-6. Meeting Angles: 4-6 specific actionable talking points tied to these contacts' roles
-7. Things to Watch: flags, risks, blockers
+6. System-Wide Initiatives: enterprise-level priorities the organization is actively pursuing — value-based care transformation, merger/acquisition integration, workforce programs, consumer access strategy, network expansion, academic or research programs, population health. These are the big bets the C-suite is making right now, not just what their ED is doing.
+7. Technology & EHR Profile: which EHR platform they run (Epic, Oracle Health/Cerner, Meditech, etc.), how long they have been on it, known modules or features in use, major tech implementations or migrations underway, AI and digital health initiatives, known vendor partnerships. Critically — assess their historical posture toward external point solutions: are they an Epic App Orchard-first shop, do they prefer best-of-breed, have they adopted outside tools before, or do they tend to consolidate onto a single platform? This directly affects how CarePathIQ gets evaluated.
+8. Meeting Angles: 4-6 specific actionable talking points tied to these contacts' roles
+9. Things to Watch: flags, risks, blockers
 
 Writing style: Human, direct, no em dashes, no hyphens as connectors, no corporate filler, specific not generic.
 
@@ -40,6 +42,8 @@ Return ONLY valid JSON:
     {"id":"crm","heading":"Account Activity","type":"crm","narrative":"string","contacts":[{"name":"string","title":"string","status":"string","notes":"string"}]},
     {"id":"leadership","heading":"Leadership Context","type":"bullets_grouped","groups":[{"heading":null,"bullets":["string"]}]},
     {"id":"strategic","heading":"Strategic Context","type":"bullets_grouped","groups":[{"heading":"string","bullets":["string"]}]},
+    {"id":"initiatives","heading":"System-Wide Initiatives","type":"bullets_grouped","groups":[{"heading":"string","bullets":["string"]}]},
+    {"id":"technology","heading":"Technology & EHR Profile","type":"bullets_grouped","groups":[{"heading":"string or null","bullets":["string"]}]},
     {"id":"angles","heading":"Meeting Angles","type":"angles","items":[{"heading":"string","body":"string"}]},
     {"id":"watch","heading":"Things to Watch","type":"bullets","bullets":["string"]},
     {"id":"recommended","heading":"Recommended Contacts","type":"recommended","note":"RESEARCH BRIEF ONLY — omit for meeting prep","contacts":[{"name":"string (real name OR role title if name unknown)","title":"string","isNamed":true,"priority":"string (1-Primary, 2-Secondary, 3-Supporting)","why":"string (why this person for this specific campaign)","findVia":"string (LinkedIn title search, conference, referral from X, etc.)"}]}
@@ -97,6 +101,8 @@ This is a RESEARCH BRIEF, not a meeting prep. No contacts are specified.
 - Skip the "Account Activity" section (no CRM data)
 - Expand "Leadership Context" and "Strategic Context" with more depth
 - Rename "Meeting Angles" to "Strategic Intelligence" and make it org-level insights: key priorities, market position, likely pain points, how CarePathIQ maps to their world
+- Expand "System-Wide Initiatives" with full depth — this is especially valuable in research mode when you don't have a specific meeting context
+- Expand "Technology & EHR Profile" with full depth — go deep on EHR history, migration status, digital health posture, and vendor relationships
 - "Things to Watch" should cover org dynamics, merger implications, competitive context
 - Add a "Recommended Contacts" section (id: "recommended") as the LAST section. For each recommended person:
   * If you know actual named individuals at this org from your training data, name them with their title
