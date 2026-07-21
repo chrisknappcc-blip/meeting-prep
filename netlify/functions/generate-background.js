@@ -14,18 +14,31 @@ HubSpot signal patterns:
 - REPLIED_30D = hot, REPLIED_90D = warm
 - Multiple seniors replying in same week = internal discussion happening
 
-Brief structure — 7 sections:
+Brief structure — 9 sections + Sources:
 1. Company Snapshot: key facts table
 2. Who You Are Meeting: profile per contact with table + paragraph
 3. Account Activity: CRM contact table + narrative
 4. Leadership Context: recent changes, new hires
-5. Strategic Context: what they're building — ED/access, AI, expansion, financial
-6. Meeting Angles: 4-6 specific actionable talking points tied to these contacts' roles
-7. Things to Watch: flags, risks, blockers
+5. Strategic Context: ED/access, AI, expansion, financial
+6. System-Wide Initiatives: enterprise-level priorities the organization is actively pursuing — value-based care transformation, merger/acquisition integration, workforce programs, consumer access strategy, network expansion, academic or research programs, population health. These are the big bets the C-suite is making right now, not just what their ED is doing.
+7. Technology & EHR Profile: which EHR platform they run (Epic, Oracle Health/Cerner, Meditech, etc.), how long they have been on it, known modules or features in use, major tech implementations or migrations underway, AI and digital health initiatives, known vendor partnerships. Critically — assess their historical posture toward external point solutions: are they an Epic App Orchard-first shop, do they prefer best-of-breed, have they adopted outside tools before, or do they tend to consolidate onto a single platform? This directly affects how CarePathIQ gets evaluated.
+8. Meeting Angles: 4-6 specific actionable talking points tied to these contacts' roles
+9. Things to Watch: flags, risks, blockers
+
+Web research — run these searches before writing:
+1. "[Company name] 2025 2026 strategic plan expansion news" — what they're building
+2. "[Company name] emergency department OR patient access OR ED Connect 2025 2026" — direct relevance
+3. "[Company name] CEO leadership OR CFO OR CSO news 2025 2026" — leadership context
+4. "[Company name] Epic OR EHR OR technology OR AI 2025 2026" — tech posture
+5. Any searches specific to the contacts' titles or the campaign context
+
+Be selective — only include information that is recent (within 18 months), specific to this organization, and relevant to why CarePathIQ matters to these people. Do not pad with generic industry observations.
+
+Collect every URL you searched or read. Cite them in the Sources section at the end of the brief.
 
 Writing style: Human, direct, no em dashes, no hyphens as connectors, no corporate filler, specific not generic.
 
-Return ONLY valid JSON with this exact structure:
+Return ONLY valid JSON:
 {
   "company": "string",
   "location": "string",
@@ -39,8 +52,14 @@ Return ONLY valid JSON with this exact structure:
     {"id":"crm","heading":"Account Activity","type":"crm","narrative":"string","contacts":[{"name":"string","title":"string","status":"string","notes":"string"}]},
     {"id":"leadership","heading":"Leadership Context","type":"bullets_grouped","groups":[{"heading":null,"bullets":["string"]}]},
     {"id":"strategic","heading":"Strategic Context","type":"bullets_grouped","groups":[{"heading":"string","bullets":["string"]}]},
+    {"id":"initiatives","heading":"System-Wide Initiatives","type":"bullets_grouped","groups":[{"heading":"string","bullets":["string"]}]},
+    {"id":"technology","heading":"Technology & EHR Profile","type":"bullets_grouped","groups":[{"heading":"string or null","bullets":["string"]}]},
     {"id":"angles","heading":"Meeting Angles","type":"angles","items":[{"heading":"string","body":"string"}]},
-    {"id":"watch","heading":"Things to Watch","type":"bullets","bullets":["string"]}
+    {"id":"watch","heading":"Things to Watch","type":"bullets","bullets":["string"]},
+    {"id":"recommended","heading":"Recommended Contacts","type":"recommended","note":"RESEARCH BRIEF ONLY — omit for meeting prep","contacts":[{"name":"string (real name OR role title if name unknown)","title":"string","isNamed":true,"priority":"string (1-Primary, 2-Secondary, 3-Supporting)","why":"string (why this person for this specific campaign)","findVia":"string (LinkedIn title search, conference, referral from X, etc.)"}]},
+    {"id":"sources","heading":"Sources & References","type":"sources","sources":[{"title":"string (page or article title)","url":"string (REQUIRED — full https:// URL)","category":"string (e.g. Press Release, News, Company Website, LinkedIn, Annual Report, Health System Profile)","note":"string (brief note on what this source contributed to the brief)"}]}
+
+CRITICAL: The sources array MUST be populated with real URLs. Every page your web_search retrieved is a source. Never return an empty sources array. If you searched 4 times, you have at least 4 sources. Include the actual URL of each page you read.
   ]
 }`;
 
@@ -48,7 +67,7 @@ exports.handler = async (event) => {
   let payload;
   try { payload = JSON.parse(event.body); } catch { return { statusCode: 400 }; }
 
-  const { jobId, company, allContacts, selectedContacts, customContacts, campaign, notes, accountOwner } = payload;
+  const { jobId, company, allContacts, selectedContacts, customContacts, campaign, notes, accountOwner, isResearch } = payload;
 
   const { getStore } = require('@netlify/blobs');
   const store = getStore('meeting-briefs');
@@ -71,7 +90,7 @@ exports.handler = async (event) => {
     return `- ${c.name} | ${c.title || 'N/A'} | ${c.notes} notes | ${c.sequences} seq | reply: ${c.lastReply || 'none'}${sig}`;
   }).join('\n');
 
-  const userPrompt = `Generate a meeting prep brief for this upcoming meeting.
+  const userPrompt = `Generate a ${isResearch ? 'company intelligence research brief' : 'meeting prep brief'}.
 
 COMPANY: ${company.name}
 LOCATION: ${company.city || ''}, ${company.state || ''}
@@ -89,7 +108,23 @@ ${customList ? `\nCUSTOM CONTACTS:\n${customList}` : ''}
 FULL CRM CONTACT LIST:
 ${allContactsTable}
 
-Use your knowledge of ${company.name} for Leadership and Strategic Context. Return only JSON.`;
+Use your knowledge of ${company.name} for Leadership and Strategic Context.${isResearch ? `
+
+This is a RESEARCH BRIEF, not a meeting prep. No contacts are specified.
+- Skip or minimize the "Who You Are Meeting" section (use a placeholder)
+- Skip the "Account Activity" section (no CRM data)
+- Expand "Leadership Context" and "Strategic Context" with more depth
+- Rename "Meeting Angles" to "Strategic Intelligence" and make it org-level insights: key priorities, market position, likely pain points, how CarePathIQ maps to their world
+- Expand "System-Wide Initiatives" with full depth — this is especially valuable in research mode when you don't have a specific meeting context
+- Expand "Technology & EHR Profile" with full depth — go deep on EHR history, migration status, digital health posture, and vendor relationships
+- "Things to Watch" should cover org dynamics, merger implications, competitive context
+- Add a "Recommended Contacts" section (id: "recommended") as the LAST section. For each recommended person:
+  * If you know actual named individuals at this org from your training data, name them with their title
+  * If not, recommend the right PERSONAS (role title + why this role for this campaign)
+  * Always explain WHY each person matters for the specific campaign angle
+  * Include 4-6 recommended contacts/personas sorted by priority` : ''}
+
+Return only JSON.`;
 
   try {
     const res = await fetch('https://api.anthropic.com/v1/messages', {
@@ -100,10 +135,17 @@ Use your knowledge of ${company.name} for Leadership and Strategic Context. Retu
         'anthropic-version': '2023-06-01',
       },
       body: JSON.stringify({
-        model: 'claude-haiku-4-5-20251001',
-        max_tokens: 6000,
+        model: 'claude-sonnet-4-5',
+        max_tokens: 8000,
         system: SYSTEM_PROMPT,
         messages: [{ role: 'user', content: userPrompt }],
+        tools: [
+          {
+            type: 'web_search_20250305',
+            name: 'web_search',
+            max_uses: 4,
+          },
+        ],
       }),
     });
 
@@ -114,13 +156,43 @@ Use your knowledge of ${company.name} for Leadership and Strategic Context. Retu
       return { statusCode: 200 };
     }
 
-    const textBlock = data.content?.find(b => b.type === 'text');
-    if (!textBlock) {
+    console.log('Anthropic content blocks:', JSON.stringify((data.content || []).map(b => b.type + (b.name ? ':' + b.name : ''))));
+    console.log('stop_reason:', data.stop_reason);
+
+    // Extract URLs from the hosted web_search tool's result blocks.
+    // Anthropic's server-executed web_search tool returns:
+    //   { type: 'server_tool_use', name: 'web_search', input: { query } }
+    //   { type: 'web_search_tool_result', tool_use_id, content: [ { type: 'web_search_result', title, url, page_age } ] }
+    const extractedSources = [];
+    (data.content || []).forEach(block => {
+      if (block.type === 'web_search_tool_result') {
+        const items = Array.isArray(block.content) ? block.content : [];
+        items.forEach(item => {
+          if (item.type === 'web_search_result' && item.url) {
+            extractedSources.push({
+              title: item.title || item.url,
+              url: item.url,
+              category: 'Web Search',
+              note: '',
+            });
+          }
+        });
+      }
+      if (block.type === 'server_tool_use' && block.name === 'web_search') {
+        console.log('Search query used:', JSON.stringify(block.input));
+      }
+    });
+    console.log('Extracted sources:', extractedSources.length);
+
+    // Concatenate all text blocks in case the model emits text around tool calls
+    const textBlocks = (data.content || []).filter(b => b.type === 'text');
+    if (textBlocks.length === 0) {
       await store.set(jobId, JSON.stringify({ status: 'error', error: 'No text in Anthropic response' }));
       return { statusCode: 200 };
     }
+    const rawCombined = textBlocks.map(b => b.text).join('\n');
 
-    const raw = textBlock.text.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+    const raw = rawCombined.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
     let brief;
     try {
       brief = JSON.parse(raw);
@@ -132,6 +204,22 @@ Use your knowledge of ${company.name} for Leadership and Strategic Context. Retu
       } else {
         await store.set(jobId, JSON.stringify({ status: 'error', error: 'Model did not return JSON', raw: raw.slice(0, 200) }));
         return { statusCode: 200 };
+      }
+    }
+
+    // If Claude left sources empty, inject programmatically extracted ones
+    if (extractedSources.length > 0) {
+      const srcSection = brief.sections?.find(s => s.id === 'sources');
+      if (srcSection && (!srcSection.sources || srcSection.sources.length === 0)) {
+        srcSection.sources = extractedSources;
+      } else if (!srcSection) {
+        if (!brief.sections) brief.sections = [];
+        brief.sections.push({
+          id: 'sources',
+          heading: 'Sources & References',
+          type: 'sources',
+          sources: extractedSources,
+        });
       }
     }
 
