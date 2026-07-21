@@ -58,7 +58,9 @@ Return ONLY valid JSON:
     {"id":"angles","heading":"Meeting Angles","type":"angles","items":[{"heading":"string","body":"string"}]},
     {"id":"watch","heading":"Things to Watch","type":"bullets","bullets":["string"]},
     {"id":"recommended","heading":"Recommended Contacts","type":"recommended","note":"RESEARCH BRIEF ONLY — omit for meeting prep","contacts":[{"name":"string (real name OR role title if name unknown)","title":"string","isNamed":true,"priority":"string (1-Primary, 2-Secondary, 3-Supporting)","why":"string (why this person for this specific campaign)","findVia":"string (LinkedIn title search, conference, referral from X, etc.)"}]},
-    {"id":"sources","heading":"Sources & References","type":"sources","sources":[{"title":"string (page or article title)","url":"string (full URL)","category":"string (e.g. Press Release, News, Company Website, LinkedIn, Annual Report, Health System Profile)","note":"string (brief note on what this source contributed)"}]}
+    {"id":"sources","heading":"Sources & References","type":"sources","sources":[{"title":"string (page or article title)","url":"string (REQUIRED — full https:// URL)","category":"string (e.g. Press Release, News, Company Website, LinkedIn, Annual Report, Health System Profile)","note":"string (brief note on what this source contributed to the brief)"}]}
+
+CRITICAL: The sources array MUST be populated with real URLs. Every page your web_search retrieved is a source. Never return an empty sources array. If you searched 4 times, you have at least 4 sources. Include the actual URL of each page you read.
   ]
 }`;
 
@@ -170,6 +172,41 @@ Return only JSON.`;
         }
 
         const data = await res.json();
+        // Log content structure for debugging (will remove after confirming format)
+        const contentTypes = (data.content||[]).map(b => b.type + (b.name ? ':'+b.name : ''));
+        console.log('Anthropic content blocks:', JSON.stringify(contentTypes));
+        console.log('stop_reason:', data.stop_reason);
+
+        // Extract URLs from web search tool results
+        const extractedSources = [];
+        (data.content || []).forEach(block => {
+          if (block.type === 'tool_result') {
+            const items = Array.isArray(block.content) ? block.content : [];
+            items.forEach(item => {
+              if (item.type === 'web_search_result' || (item.url && item.title)) {
+                extractedSources.push({
+                  title: item.title || item.url,
+                  url: item.url || '',
+                  category: 'Web Search',
+                  note: '',
+                });
+              } else if (item.type === 'document' && item.source?.url) {
+                extractedSources.push({
+                  title: item.title || item.source.url,
+                  url: item.source.url,
+                  category: 'Web Search',
+                  note: '',
+                });
+              }
+            });
+          }
+          // Also check for tool_use blocks to capture search queries as context
+          if (block.type === 'tool_use' && block.name === 'web_search') {
+            console.log('Search query used:', JSON.stringify(block.input));
+          }
+        });
+        console.log('Extracted sources:', extractedSources.length);
+
         const textBlock = data.content?.find(b => b.type === 'text');
         if (!textBlock) { send({ type: 'error', error: 'No text in Anthropic response' }); controller.close(); return; }
 
@@ -187,6 +224,21 @@ Return only JSON.`;
           }
         }
 
+        // If Claude left sources empty, inject programmatically extracted ones
+        if (extractedSources.length > 0) {
+          const srcSection = brief.sections?.find(s => s.id === 'sources');
+          if (srcSection && (!srcSection.sources || srcSection.sources.length === 0)) {
+            srcSection.sources = extractedSources;
+          } else if (!srcSection) {
+            if (!brief.sections) brief.sections = [];
+            brief.sections.push({
+              id: 'sources',
+              heading: 'Sources & References',
+              type: 'sources',
+              sources: extractedSources,
+            });
+          }
+        }
         send({ type: 'done', brief });
       } catch (err) {
         clearInterval(heartbeat);
