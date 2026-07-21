@@ -373,6 +373,7 @@ var state = {
 };
 var searchTimer = null;
 var currentStep = 1;
+var pollTimer = null;
 
 // ── NAVIGATION ────────────────────────────────────────────────────────────────
 function goStep(n) {
@@ -387,6 +388,7 @@ function goStep(n) {
 }
 
 function resetAll() {
+  if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
   state = { company: null, allContacts: [], selectedIds: new Set(), customContacts: [], campaign: '', notes: '', brief: null };
   document.getElementById('companySearch').value = '';
   document.getElementById('searchResults').innerHTML = '';
@@ -596,13 +598,12 @@ function renderCustomList() {
   }).join('');
 }
 
-// ── STEP 3 → 4: GENERATE ─────────────────────────────────────────────────────
+// ── STEP 3 → 4: GENERATE (background job + poll) ─────────────────────────────
 function generate() {
   state.campaign = document.getElementById('campaignSelect').value;
   state.notes = document.getElementById('contextNotes').value.trim();
 
   var selected = state.allContacts.filter(function(c){ return state.selectedIds.has(c.id); });
-
 
   goStep(4);
   document.getElementById('loadingState').style.display = 'block';
@@ -624,10 +625,8 @@ function generate() {
     var elapsed = Math.round((Date.now() - genStart) / 1000);
     var el = document.getElementById('loadingElapsed');
     if (el) el.textContent = elapsed + 's elapsed';
-    // Progress bar — caps at 95%
     var bar = document.getElementById('loadingBar');
     if (bar) bar.style.width = Math.min(95, elapsed * 1.1) + '%';
-    // Stage messaging
     var stage = STAGES.filter(function(s){ return elapsed >= s.at; }).pop();
     if (stage && STAGES.indexOf(stage) !== lastStage) {
       lastStage = STAGES.indexOf(stage);
@@ -638,10 +637,21 @@ function generate() {
     }
   }, 1000);
 
-  fetch('/.netlify/functions/generate-stream', {
+  function stopTimers() {
+    clearInterval(stepTimer);
+    if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
+  }
+
+  var jobId = 'job_' + Date.now() + '_' + Math.random().toString(36).slice(2, 10);
+
+  // Kick off the background job. This function returns almost immediately —
+  // the actual brief generation (including web_search) runs after this responds,
+  // up to Netlify's background function limit, well beyond the old 10s streaming cap.
+  fetch('/.netlify/functions/generate-background', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
+      jobId: jobId,
       company: state.company,
       allContacts: state.allContacts,
       selectedContacts: selected,
@@ -653,53 +663,41 @@ function generate() {
     }),
   })
   .then(function(res) {
-    if (!res.ok || !res.body) throw new Error('Server error ' + res.status);
-
-    var reader = res.body.getReader();
-    var decoder = new TextDecoder();
-    var buffer = '';
-
-    function read() {
-      return reader.read().then(function(chunk) {
-        if (chunk.done) return;
-
-        buffer += decoder.decode(chunk.value, { stream: true });
-        var lines = buffer.split('\n');
-        buffer = lines.pop();
-
-        for (var i = 0; i < lines.length; i++) {
-          var line = lines[i];
-          if (!line.startsWith('data: ')) continue;
-          var text = line.slice(6).trim();
-          if (!text) continue;
-
-          var evt;
-          try { evt = JSON.parse(text); } catch { continue; }
-
-          if (evt.type === 'done') {
-            clearInterval(stepTimer);
+    if (!res.ok) throw new Error('Failed to start generation (server error ' + res.status + ')');
+    // Start polling for the result
+    var pollCount = 0;
+    var MAX_POLLS = 200; // ~10 minutes at 3s intervals — comfortably inside the 15-min background limit
+    pollTimer = setInterval(function() {
+      pollCount++;
+      if (pollCount > MAX_POLLS) {
+        stopTimers();
+        document.getElementById('loadingState').style.display = 'none';
+        showError('Generation is taking much longer than expected. It may still finish — check back, or try again.');
+        return;
+      }
+      fetch('/.netlify/functions/generate-status?id=' + encodeURIComponent(jobId))
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+          if (data.status === 'done') {
+            stopTimers();
             document.getElementById('loadingState').style.display = 'none';
-            state.brief = evt.brief;
-            renderBrief(evt.brief);
+            state.brief = data.brief;
+            renderBrief(data.brief);
             document.getElementById('briefDisplay').style.display = 'block';
-            return;
-          } else if (evt.type === 'error') {
-            clearInterval(stepTimer);
+          } else if (data.status === 'error') {
+            stopTimers();
             document.getElementById('loadingState').style.display = 'none';
-            showError(evt.error || 'Generation failed');
-            return;
+            showError(data.error || 'Generation failed');
           }
-          // type === 'ping': keep going
-        }
-
-        return read();
-      });
-    }
-
-    return read();
+          // status === 'pending' → keep polling
+        })
+        .catch(function() {
+          // Transient network hiccup on a poll — don't kill the job over one failed check
+        });
+    }, 3000);
   })
   .catch(function(err) {
-    clearInterval(stepTimer);
+    stopTimers();
     document.getElementById('loadingState').style.display = 'none';
     showError(err.message);
   });
