@@ -129,37 +129,43 @@ Return only JSON.`;
   const encoder = new TextEncoder();
 
   const stream = new ReadableStream({
-    async start(controller) {
+    async start(streamController) {
       const send = (obj) => {
-        try { controller.enqueue(encoder.encode(`data: ${JSON.stringify(obj)}\n\n`)); } catch {}
+        try { streamController.enqueue(encoder.encode(`data: ${JSON.stringify(obj)}\n\n`)); } catch {}
       };
 
       // Heartbeat every 5 seconds keeps the gateway alive
       const heartbeat = setInterval(() => send({ type: 'ping' }), 5000);
 
       try {
-        const controller = new AbortController();
-        const fetchTimeout = setTimeout(() => controller.abort(), 110000); // 110s hard limit
+        const abortController = new AbortController();
+        const fetchTimeout = setTimeout(() => abortController.abort(), 110000); // 110s hard limit
         let res;
         try {
           res = await fetch('https://api.anthropic.com/v1/messages', {
-            signal: controller.signal,
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'x-api-key': ANTHROPIC_KEY,
-            'anthropic-version': '2023-06-01',
-          },
-          body: JSON.stringify({
-            model: 'claude-haiku-4-5-20251001',
-            max_tokens: 6000,
-            system: SYSTEM_PROMPT,
-            messages: [{ role: 'user', content: userPrompt }],
-          }),
-        });
+            signal: abortController.signal,
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'x-api-key': ANTHROPIC_KEY,
+              'anthropic-version': '2023-06-01',
+            },
+            body: JSON.stringify({
+              model: 'claude-sonnet-4-5',
+              max_tokens: 8000,
+              system: SYSTEM_PROMPT,
+              messages: [{ role: 'user', content: userPrompt }],
+              tools: [
+                {
+                  type: 'web_search_20250305',
+                  name: 'web_search',
+                  max_uses: 4,
+                },
+              ],
+            }),
+          });
 
-        clearInterval(heartbeat);
-
+          clearInterval(heartbeat);
         } finally {
           clearTimeout(fetchTimeout);
         }
@@ -167,50 +173,52 @@ Return only JSON.`;
         if (!res.ok) {
           const err = await res.text();
           send({ type: 'error', error: `Anthropic ${res.status}: ${err.slice(0, 200)}` });
-          controller.close();
+          streamController.close();
           return;
         }
 
         const data = await res.json();
+
         // Log content structure for debugging (will remove after confirming format)
-        const contentTypes = (data.content||[]).map(b => b.type + (b.name ? ':'+b.name : ''));
+        const contentTypes = (data.content || []).map(b => b.type + (b.name ? ':' + b.name : ''));
         console.log('Anthropic content blocks:', JSON.stringify(contentTypes));
         console.log('stop_reason:', data.stop_reason);
 
-        // Extract URLs from web search tool results
+        // Extract URLs from the hosted web_search tool's result blocks.
+        // Anthropic's server-executed web_search tool returns:
+        //   { type: 'server_tool_use', name: 'web_search', input: { query } }
+        //   { type: 'web_search_tool_result', tool_use_id, content: [ { type: 'web_search_result', title, url, page_age } ] }
         const extractedSources = [];
         (data.content || []).forEach(block => {
-          if (block.type === 'tool_result') {
+          if (block.type === 'web_search_tool_result') {
             const items = Array.isArray(block.content) ? block.content : [];
             items.forEach(item => {
-              if (item.type === 'web_search_result' || (item.url && item.title)) {
+              if (item.type === 'web_search_result' && item.url) {
                 extractedSources.push({
                   title: item.title || item.url,
-                  url: item.url || '',
-                  category: 'Web Search',
-                  note: '',
-                });
-              } else if (item.type === 'document' && item.source?.url) {
-                extractedSources.push({
-                  title: item.title || item.source.url,
-                  url: item.source.url,
+                  url: item.url,
                   category: 'Web Search',
                   note: '',
                 });
               }
             });
           }
-          // Also check for tool_use blocks to capture search queries as context
-          if (block.type === 'tool_use' && block.name === 'web_search') {
+          if (block.type === 'server_tool_use' && block.name === 'web_search') {
             console.log('Search query used:', JSON.stringify(block.input));
           }
         });
         console.log('Extracted sources:', extractedSources.length);
 
-        const textBlock = data.content?.find(b => b.type === 'text');
-        if (!textBlock) { send({ type: 'error', error: 'No text in Anthropic response' }); controller.close(); return; }
+        // Concatenate all text blocks in case the model emits text around tool calls
+        const textBlocks = (data.content || []).filter(b => b.type === 'text');
+        if (textBlocks.length === 0) {
+          send({ type: 'error', error: 'No text in Anthropic response' });
+          streamController.close();
+          return;
+        }
+        const rawCombined = textBlocks.map(b => b.text).join('\n');
 
-        const raw = textBlock.text.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+        const raw = rawCombined.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
         let brief;
         try {
           brief = JSON.parse(raw);
@@ -218,9 +226,9 @@ Return only JSON.`;
           const s = raw.indexOf('{'), e = raw.lastIndexOf('}');
           if (s !== -1 && e !== -1) {
             try { brief = JSON.parse(raw.slice(s, e + 1)); }
-            catch { send({ type: 'error', error: 'Malformed JSON from model' }); controller.close(); return; }
+            catch { send({ type: 'error', error: 'Malformed JSON from model' }); streamController.close(); return; }
           } else {
-            send({ type: 'error', error: 'Model did not return JSON' }); controller.close(); return;
+            send({ type: 'error', error: 'Model did not return JSON' }); streamController.close(); return;
           }
         }
 
@@ -244,7 +252,7 @@ Return only JSON.`;
         clearInterval(heartbeat);
         send({ type: 'error', error: err.message });
       } finally {
-        controller.close();
+        streamController.close();
       }
     }
   });
