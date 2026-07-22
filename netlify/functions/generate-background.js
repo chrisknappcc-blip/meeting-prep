@@ -1,5 +1,29 @@
 const ANTHROPIC_KEY = process.env.ANTHROPIC_API_KEY;
 
+// ---- Azure Blob Storage (same REST pattern as Cipher's hubspot.js) ----
+const AZURE_ACCOUNT = process.env.AZURE_STORAGE_ACCOUNT_NAME;
+const AZURE_SAS_TOKEN = process.env.AZURE_STORAGE_SAS_TOKEN;
+const AZURE_CONTAINER = process.env.AZURE_STORAGE_CONTAINER || "meeting-briefs";
+
+function blobUrl(blobName) {
+  const sas = (AZURE_SAS_TOKEN || "").startsWith("?") ? AZURE_SAS_TOKEN : `?${AZURE_SAS_TOKEN}`;
+  return `https://${AZURE_ACCOUNT}.blob.core.windows.net/${AZURE_CONTAINER}/${blobName}${sas}`;
+}
+
+async function writeJobBlob(jobId, data) {
+  const payload = JSON.stringify(data);
+  await fetch(blobUrl(`${jobId}.json`), {
+    method: "PUT",
+    headers: {
+      "Content-Type": "application/json",
+      "x-ms-blob-type": "BlockBlob",
+      "Content-Length": String(Buffer.byteLength(payload)),
+    },
+    body: payload,
+  });
+}
+
+// ---- System prompt: 9 sections + Sources, ported from the fixed generate-stream.js ----
 const SYSTEM_PROMPT = `You are a meeting intelligence expert for Care Continuity, makers of CarePathIQ. You produce meeting prep briefs for the sales team before meetings with health system executives.
 
 Care Continuity's core products:
@@ -65,50 +89,73 @@ CRITICAL: The sources array MUST be populated with real URLs. Every page your we
 
 exports.handler = async (event) => {
   let payload;
-  try { payload = JSON.parse(event.body); } catch { return { statusCode: 400 }; }
+  try {
+    payload = JSON.parse(event.body);
+  } catch {
+    return { statusCode: 400 };
+  }
 
-  const { jobId, company, allContacts, selectedContacts, customContacts, campaign, notes, accountOwner, isResearch } = payload;
+  const {
+    jobId,
+    company,
+    allContacts,
+    selectedContacts,
+    customContacts,
+    campaign,
+    notes,
+    accountOwner,
+    isResearch,
+  } = payload;
 
-  const { getStore } = require('@netlify/blobs');
-  const store = getStore('meeting-briefs');
+  if (!jobId) {
+    return { statusCode: 400, body: JSON.stringify({ error: "Missing jobId" }) };
+  }
 
-  // Mark as in-progress
-  await store.set(jobId, JSON.stringify({ status: 'pending' }));
+  // Mark as in-progress immediately so the first poll doesn't 404
+  await writeJobBlob(jobId, { status: "pending" });
 
-  const today = new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+  const today = new Date().toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
 
-  const selectedList = (selectedContacts || []).map(c =>
-    `${c.name} (${c.title || 'N/A'}) | email: ${c.email || 'N/A'} | ${c.notes} notes | ${c.sequences} seq | last reply: ${c.lastReply || 'none'} | signals: ${(c.signals||[]).join(', ') || 'none'}`
-  ).join('\n');
+  const selectedList = (selectedContacts || [])
+    .map(
+      (c) =>
+        `${c.name} (${c.title || "N/A"}) | email: ${c.email || "N/A"} | ${c.notes} notes | ${c.sequences} seq | last reply: ${c.lastReply || "none"} | signals: ${(c.signals || []).join(", ") || "none"}`
+    )
+    .join("\n");
 
-  const customList = (customContacts || []).map(c =>
-    `${c.name} (${c.title || 'N/A'}) — manually added, not yet in HubSpot`
-  ).join('\n');
+  const customList = (customContacts || [])
+    .map((c) => `${c.name} (${c.title || "N/A"}) — manually added, not yet in HubSpot`)
+    .join("\n");
 
-  const allContactsTable = (allContacts || []).slice(0, 50).map(c => {
-    const sig = c.signals && c.signals.length ? ` [${c.signals.join('|')}]` : '';
-    return `- ${c.name} | ${c.title || 'N/A'} | ${c.notes} notes | ${c.sequences} seq | reply: ${c.lastReply || 'none'}${sig}`;
-  }).join('\n');
+  const allContactsTable = (allContacts || [])
+    .slice(0, 50)
+    .map((c) => {
+      const sig = c.signals && c.signals.length ? ` [${c.signals.join("|")}]` : "";
+      return `- ${c.name} | ${c.title || "N/A"} | ${c.notes} notes | ${c.sequences} seq | reply: ${c.lastReply || "none"}${sig}`;
+    })
+    .join("\n");
 
-  const userPrompt = `Generate a ${isResearch ? 'company intelligence research brief' : 'meeting prep brief'}.
+  const userPrompt = `Generate a ${isResearch ? "company intelligence research brief" : "meeting prep brief"}.
 
 COMPANY: ${company.name}
-LOCATION: ${company.city || ''}, ${company.state || ''}
-ACCOUNT OWNER: ${accountOwner || 'Unknown'}
+LOCATION: ${company.city || ""}, ${company.state || ""}
+ACCOUNT OWNER: ${accountOwner || "Unknown"}
 HUBSPOT: ${company.notes} total contacted notes
 TODAY: ${today}
 
-CAMPAIGN: ${campaign || 'Not specified'}
-REP NOTES: ${notes || 'None'}
+CAMPAIGN: ${campaign || "Not specified"}
+REP NOTES: ${notes || "None"}
 
 CONTACTS IN THIS MEETING:
 ${selectedList}
-${customList ? `\nCUSTOM CONTACTS:\n${customList}` : ''}
+${customList ? `\nCUSTOM CONTACTS:\n${customList}` : ""}
 
 FULL CRM CONTACT LIST:
 ${allContactsTable}
 
-Use your knowledge of ${company.name} for Leadership and Strategic Context.${isResearch ? `
+Use your knowledge of ${company.name} for Leadership and Strategic Context.${
+    isResearch
+      ? `
 
 This is a RESEARCH BRIEF, not a meeting prep. No contacts are specified.
 - Skip or minimize the "Who You Are Meeting" section (use a placeholder)
@@ -122,110 +169,113 @@ This is a RESEARCH BRIEF, not a meeting prep. No contacts are specified.
   * If you know actual named individuals at this org from your training data, name them with their title
   * If not, recommend the right PERSONAS (role title + why this role for this campaign)
   * Always explain WHY each person matters for the specific campaign angle
-  * Include 4-6 recommended contacts/personas sorted by priority` : ''}
+  * Include 4-6 recommended contacts/personas sorted by priority`
+      : ""
+  }
 
 Return only JSON.`;
 
   try {
-    const res = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
+    const res = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
       headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': ANTHROPIC_KEY,
-        'anthropic-version': '2023-06-01',
+        "Content-Type": "application/json",
+        "x-api-key": ANTHROPIC_KEY,
+        "anthropic-version": "2023-06-01",
       },
       body: JSON.stringify({
-        model: 'claude-sonnet-4-5',
+        model: "claude-sonnet-4-5",
         max_tokens: 8000,
         system: SYSTEM_PROMPT,
-        messages: [{ role: 'user', content: userPrompt }],
-        tools: [
-          {
-            type: 'web_search_20250305',
-            name: 'web_search',
-            max_uses: 4,
-          },
-        ],
+        tools: [{ type: "web_search_20250305", name: "web_search" }],
+        messages: [{ role: "user", content: userPrompt }],
       }),
     });
 
     const data = await res.json();
 
     if (!res.ok) {
-      await store.set(jobId, JSON.stringify({ status: 'error', error: `Anthropic error: ${data.error?.message || res.status}` }));
+      await writeJobBlob(jobId, { status: "error", error: `Anthropic error: ${data.error?.message || res.status}` });
       return { statusCode: 200 };
     }
 
-    console.log('Anthropic content blocks:', JSON.stringify((data.content || []).map(b => b.type + (b.name ? ':' + b.name : ''))));
-    console.log('stop_reason:', data.stop_reason);
+    // Log content block types for debugging (safe to remove once confirmed stable)
+    const contentTypes = (data.content || []).map((b) => b.type + (b.name ? ":" + b.name : ""));
+    console.log("Anthropic content blocks:", JSON.stringify(contentTypes));
+    console.log("stop_reason:", data.stop_reason);
 
-    // Extract URLs from the hosted web_search tool's result blocks.
-    // Anthropic's server-executed web_search tool returns:
-    //   { type: 'server_tool_use', name: 'web_search', input: { query } }
-    //   { type: 'web_search_tool_result', tool_use_id, content: [ { type: 'web_search_result', title, url, page_age } ] }
+    // Extract sources from server-side web search results.
+    // Correct block types: web_search_tool_result (the results) and server_tool_use (the query the model issued).
     const extractedSources = [];
-    (data.content || []).forEach(block => {
-      if (block.type === 'web_search_tool_result') {
+    (data.content || []).forEach((block) => {
+      if (block.type === "web_search_tool_result") {
         const items = Array.isArray(block.content) ? block.content : [];
-        items.forEach(item => {
-          if (item.type === 'web_search_result' && item.url) {
+        items.forEach((item) => {
+          if (item.type === "web_search_result") {
             extractedSources.push({
               title: item.title || item.url,
-              url: item.url,
-              category: 'Web Search',
-              note: '',
+              url: item.url || "",
+              category: "Web Search",
+              note: "",
             });
           }
         });
       }
-      if (block.type === 'server_tool_use' && block.name === 'web_search') {
-        console.log('Search query used:', JSON.stringify(block.input));
+      if (block.type === "server_tool_use" && block.name === "web_search") {
+        console.log("Search query used:", JSON.stringify(block.input));
       }
     });
-    console.log('Extracted sources:', extractedSources.length);
+    console.log("Extracted sources:", extractedSources.length);
 
-    // Concatenate all text blocks in case the model emits text around tool calls
-    const textBlocks = (data.content || []).filter(b => b.type === 'text');
-    if (textBlocks.length === 0) {
-      await store.set(jobId, JSON.stringify({ status: 'error', error: 'No text in Anthropic response' }));
+    // With web_search, there can be multiple text blocks (pre-search commentary + final answer).
+    // The final JSON is in the last text block.
+    const textBlocks = (data.content || []).filter((b) => b.type === "text");
+    const textBlock = textBlocks[textBlocks.length - 1];
+
+    if (!textBlock) {
+      await writeJobBlob(jobId, { status: "error", error: "No text in Anthropic response" });
       return { statusCode: 200 };
     }
-    const rawCombined = textBlocks.map(b => b.text).join('\n');
 
-    const raw = rawCombined.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+    const raw = textBlock.text.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
     let brief;
     try {
       brief = JSON.parse(raw);
     } catch {
-      const s = raw.indexOf('{'), e = raw.lastIndexOf('}');
+      const s = raw.indexOf("{"),
+        e = raw.lastIndexOf("}");
       if (s !== -1 && e !== -1) {
-        try { brief = JSON.parse(raw.slice(s, e + 1)); }
-        catch { await store.set(jobId, JSON.stringify({ status: 'error', error: 'Malformed JSON from model', raw: raw.slice(0, 200) })); return { statusCode: 200 }; }
+        try {
+          brief = JSON.parse(raw.slice(s, e + 1));
+        } catch {
+          await writeJobBlob(jobId, { status: "error", error: "Malformed JSON from model", raw: raw.slice(0, 200) });
+          return { statusCode: 200 };
+        }
       } else {
-        await store.set(jobId, JSON.stringify({ status: 'error', error: 'Model did not return JSON', raw: raw.slice(0, 200) }));
+        await writeJobBlob(jobId, { status: "error", error: "Model did not return JSON", raw: raw.slice(0, 200) });
         return { statusCode: 200 };
       }
     }
 
-    // If Claude left sources empty, inject programmatically extracted ones
+    // If Claude left sources empty (or omitted the section), inject the programmatically extracted ones
     if (extractedSources.length > 0) {
-      const srcSection = brief.sections?.find(s => s.id === 'sources');
+      const srcSection = brief.sections?.find((s) => s.id === "sources");
       if (srcSection && (!srcSection.sources || srcSection.sources.length === 0)) {
         srcSection.sources = extractedSources;
       } else if (!srcSection) {
         if (!brief.sections) brief.sections = [];
         brief.sections.push({
-          id: 'sources',
-          heading: 'Sources & References',
-          type: 'sources',
+          id: "sources",
+          heading: "Sources & References",
+          type: "sources",
           sources: extractedSources,
         });
       }
     }
 
-    await store.set(jobId, JSON.stringify({ status: 'done', brief }));
+    await writeJobBlob(jobId, { status: "done", brief });
   } catch (err) {
-    await store.set(jobId, JSON.stringify({ status: 'error', error: err.message }));
+    await writeJobBlob(jobId, { status: "error", error: err.message });
   }
 
   return { statusCode: 200 };
